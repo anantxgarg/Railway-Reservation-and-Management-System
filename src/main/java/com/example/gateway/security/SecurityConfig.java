@@ -10,6 +10,7 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.header.writers.frameoptions.XFrameOptionsHeaderWriter;
 
 @Configuration
 @EnableWebSecurity
@@ -23,10 +24,15 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
+                // Allow H2 console iframes (dev only)
+                .headers(headers -> headers
+                        .frameOptions(frame -> frame.disable()))
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         // Static web resources
                         .requestMatchers("/", "/index.html", "/css/**", "/js/**", "/favicon.ico", "/*.jpg").permitAll()
+                        // H2 browser console (dev only)
+                        .requestMatchers("/h2-console/**").permitAll()
                         // Public payment webhooks (secured via Razorpay HMAC signature)
                         .requestMatchers("/api/payments/webhook").permitAll()
                         // Public fare preview
