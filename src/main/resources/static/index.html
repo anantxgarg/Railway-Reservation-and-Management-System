@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Book a ticket</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Barlow+Condensed:wght@600;700&display=swap">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <nav class="tabs" aria-label="Main">
+      <a href="#/book" data-nav="book" aria-current="page">Book a ticket</a>
+      <a href="#/manage" data-nav="manage">Manage booking</a>
+    </nav>
+  </header>
+
+  <main id="main">
+
+    <!-- Book a ticket -->
+    <section id="view-book" aria-labelledby="book-title">
+      <div class="layout">
+        <div class="primary">
+          <form id="book-form" novalidate>
+            <h1 id="book-title">Book a ticket</h1>
+            <p class="lede">Enter the passenger and journey details. Your ticket updates with the fare as you type.</p>
+
+            <fieldset>
+              <legend>Passenger</legend>
+              <div class="fields">
+                <div class="field">
+                  <label for="f-passengerName">Full name</label>
+                  <input id="f-passengerName" name="passengerName" autocomplete="name" required>
+                  <p class="error" id="e-passengerName" hidden></p>
+                </div>
+                <div class="field">
+                  <label for="f-email">Email</label>
+                  <input id="f-email" name="email" type="email" autocomplete="email" required>
+                  <p class="error" id="e-email" hidden></p>
+                </div>
+                <div class="field">
+                  <label for="f-phone">Mobile number</label>
+                  <input id="f-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" required>
+                  <p class="error" id="e-phone" hidden></p>
+                </div>
+                <div class="field">
+                  <label for="f-category">Fare type</label>
+                  <select id="f-category" name="category"></select>
+                </div>
+              </div>
+            </fieldset>
+
+            <fieldset>
+              <legend>Journey</legend>
+              <div class="fields">
+                <div class="field">
+                  <label for="f-origin">From</label>
+                  <input id="f-origin" name="origin" autocomplete="off" required>
+                  <p class="error" id="e-origin" hidden></p>
+                </div>
+                <div class="field">
+                  <label for="f-destination">To</label>
+                  <input id="f-destination" name="destination" autocomplete="off" required>
+                  <p class="error" id="e-destination" hidden></p>
+                </div>
+                <div class="field wide">
+                  <label for="f-departureTime">Departure</label>
+                  <input id="f-departureTime" name="departureTime" type="datetime-local" required>
+                  <p class="error" id="e-departureTime" hidden></p>
+                </div>
+              </div>
+            </fieldset>
+
+            <fieldset>
+              <legend>Fare</legend>
+              <div class="fields">
+                <div class="field">
+                  <label for="f-baseFare">Base fare (INR)</label>
+                  <input id="f-baseFare" name="baseFare" type="number" inputmode="decimal" min="1" step="0.01" required>
+                  <p class="help">Before any concession.</p>
+                  <p class="error" id="e-baseFare" hidden></p>
+                </div>
+              </div>
+            </fieldset>
+          </form>
+
+          <section id="confirmation" class="confirmation" aria-live="polite" hidden></section>
+        </div>
+
+        <aside class="preview" aria-label="Your ticket">
+          <div id="ticket-book"></div>
+
+          <div id="pay-area" class="pay-area">
+            <button class="btn btn-primary" id="pay-btn" type="submit" form="book-form">Pay</button>
+            <p class="message" id="pay-message" role="status" hidden></p>
+
+            <!-- Test mode help. Delete this block before using live Razorpay keys. -->
+            <details class="test-hint">
+              <summary>Testing with Razorpay test mode?</summary>
+              <p>Pay with card 4111 1111 1111 1111, any future expiry date, any CVV and any OTP. For UPI, enter success@razorpay.</p>
+            </details>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- Manage booking -->
+    <section id="view-manage" aria-labelledby="manage-title" hidden>
+      <div class="layout single" id="manage-layout">
+        <div class="primary">
+          <h1 id="manage-title">Manage booking</h1>
+          <p class="lede">Look up a booking to check its status, finish a payment, or cancel and get a refund.</p>
+
+          <form id="find-form" novalidate>
+            <div class="field">
+              <label for="f-bookingId">Booking number</label>
+              <div class="find-row">
+                <input id="f-bookingId" name="bookingId" inputmode="numeric" autocomplete="off">
+                <button class="btn btn-secondary" type="submit">Find booking</button>
+              </div>
+              <p class="error" id="e-bookingId" hidden></p>
+            </div>
+          </form>
+
+          <div id="manage-detail" aria-live="polite"></div>
+        </div>
+
+        <aside class="preview" id="manage-aside" aria-label="Your ticket" hidden>
+          <div id="ticket-manage"></div>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>Payments are processed by Razorpay.</p>
+  </footer>
+
+  <dialog id="confirm-dialog" aria-labelledby="cd-title">
+    <form method="dialog">
+      <h2 id="cd-title"></h2>
+      <p id="cd-body"></p>
+      <div class="dialog-actions">
+        <button class="btn btn-secondary" id="cd-cancel" value="cancel"></button>
+        <button class="btn btn-danger" id="cd-ok" value="ok"></button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
