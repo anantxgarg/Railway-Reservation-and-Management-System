@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   AppBar, Toolbar, Typography, Box, Tabs, Tab, Container,
-  Button, Chip, Dialog, DialogTitle, DialogContent, DialogActions,
-  FormControl, InputLabel, Select, MenuItem, TextField, Alert,
-  Paper, IconButton, Tooltip
+  Button, Chip, Paper
 } from '@mui/material';
 import DirectionsTransitIcon from '@mui/icons-material/DirectionsTransit';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
@@ -17,97 +15,113 @@ import BookingAndPayment from './components/BookingAndPayment';
 import MyPayments from './components/MyPayments';
 import Refunds from './components/Refunds';
 import Concessions from './components/Concessions';
-import { getCurrentUser, loginWithRole, setAuthSession } from './api';
+import LoginModal from './components/LoginModal';
+import { getCurrentUser, loginWithRole } from './api';
 
 export default function App() {
   const [tabIndex, setTabIndex] = useState(0);
   const [user, setUser] = useState(getCurrentUser());
-  const [roleDialogOpen, setRoleDialogOpen] = useState(false);
-  const [selectedRole, setSelectedRole] = useState(user.role);
-  const [customUserId, setCustomUserId] = useState(user.userId);
-  const [customEmail, setCustomEmail] = useState(user.email);
-  const [authError, setAuthError] = useState(null);
+  const [loginModalOpen, setLoginModalOpen] = useState(false);
 
-  // Auto-login on initial mount to ensure valid token in localStorage
+  // Initialize dev session on start
   useEffect(() => {
     loginWithRole(user.role, user.userId, user.email)
       .then(({ user: loggedUser }) => {
         setUser(loggedUser);
       })
       .catch((e) => {
-        console.warn('Initial dev token generation:', e);
+        console.warn('Initial session initialization:', e);
       });
   }, []);
-
-  const handleSwitchRoleSubmit = async () => {
-    setAuthError(null);
-    try {
-      const { user: updatedUser } = await loginWithRole(selectedRole, customUserId, customEmail);
-      setUser(updatedUser);
-      setRoleDialogOpen(false);
-    } catch (err) {
-      setAuthError(err.message || 'Failed to authenticate');
-    }
-  };
 
   const getRoleChipColor = (role) => {
     if (role === 'ADMIN') return 'error';
     if (role === 'STAFF') return 'warning';
-    return 'info';
+    return 'primary';
   };
 
   return (
-    <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
       {/* Top Navbar */}
-      <AppBar position="static" sx={{ bgcolor: 'primary.main' }}>
-        <Toolbar sx={{ justifyContent: 'space-between' }}>
+      <AppBar position="static" elevation={0} sx={{ bgcolor: '#0b111e', borderBottom: '1px solid #1e293b' }}>
+        <Toolbar sx={{ justifyContent: 'space-between', py: 1 }}>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <DirectionsTransitIcon sx={{ fontSize: 32, mr: 1.5, color: 'secondary.light' }} />
+            <Box
+              sx={{
+                width: 44,
+                height: 44,
+                borderRadius: '50%',
+                border: '1.5px solid rgba(255, 255, 255, 0.4)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                mr: 2,
+                boxShadow: '0 0 12px rgba(37, 99, 235, 0.35)',
+                background: 'rgba(17, 26, 46, 0.8)'
+              }}
+            >
+              <DirectionsTransitIcon sx={{ fontSize: 24, color: '#f8fafc' }} />
+            </Box>
             <Box>
-              <Typography variant="h6" component="div" sx={{ fontWeight: 700, letterSpacing: 0.5 }}>
-                INDIAN RAILWAYS
+              <Typography variant="h6" component="div" sx={{ fontWeight: 800, letterSpacing: '1px', color: '#f8fafc', lineHeight: 1.2 }}>
+                RAILWAY MANAGEMENT SYSTEM
               </Typography>
-              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)' }}>
-                Payments, Refunds & Concessions Subsystem (Module 4)
+              <Typography variant="caption" sx={{ color: '#94a3b8', letterSpacing: '0.5px' }}>
+                Safe Journeys &bull; Better Tomorrows
               </Typography>
             </Box>
           </Box>
 
-          {/* User Account / Role Pill */}
+          {/* User Account / Role Pill & Login Button */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
             <Chip
               icon={<AccountCircleIcon style={{ color: '#fff' }} />}
-              label={`${user.role} (#${user.userId})`}
+              label={`${user.role} (${user.email})`}
               color={getRoleChipColor(user.role)}
-              sx={{ fontWeight: 600, color: '#fff' }}
+              sx={{ fontWeight: 600, color: '#fff', bgcolor: user.role === 'CUSTOMER' ? '#1d68ed' : undefined }}
             />
             <Button
               variant="outlined"
               size="small"
-              onClick={() => {
-                setSelectedRole(user.role);
-                setCustomUserId(user.userId);
-                setCustomEmail(user.email);
-                setRoleDialogOpen(true);
+              onClick={() => setLoginModalOpen(true)}
+              sx={{
+                color: '#f8fafc',
+                borderColor: '#22324e',
+                bgcolor: 'rgba(17, 26, 46, 0.8)',
+                '&:hover': { borderColor: '#3b82f6', bgcolor: '#111a2e' }
               }}
-              sx={{ color: '#ffffff', borderColor: 'rgba(255,255,255,0.4)', '&:hover': { borderColor: '#ffffff' } }}
             >
-              Switch Role / Login
+              Login / Switch Account
             </Button>
           </Box>
         </Toolbar>
       </AppBar>
 
       {/* Subheader Navigation Tabs */}
-      <Paper elevation={1} square sx={{ bgcolor: '#ffffff', borderBottom: '1px solid #e2e8f0' }}>
+      <Paper elevation={0} square sx={{ bgcolor: '#0f172a', borderBottom: '1px solid #1e293b' }}>
         <Container maxWidth="lg">
           <Tabs
             value={tabIndex}
             onChange={(e, newIdx) => setTabIndex(newIdx)}
-            textColor="primary"
+            textColor="secondary"
             indicatorColor="secondary"
             variant="scrollable"
             scrollButtons="auto"
+            sx={{
+              '& .MuiTab-root': {
+                color: '#94a3b8',
+                fontWeight: 600,
+                py: 2,
+                '&.Mui-selected': {
+                  color: '#38bdf8',
+                },
+              },
+              '& .MuiTabs-indicator': {
+                backgroundColor: '#38bdf8',
+                height: 3,
+                borderRadius: '3px 3px 0 0',
+              },
+            }}
           >
             <Tab icon={<PaymentIcon />} iconPosition="start" label="Book & Pay" />
             <Tab icon={<ReceiptIcon />} iconPosition="start" label="My Payments" />
@@ -129,75 +143,19 @@ export default function App() {
         {tabIndex === 3 && <Concessions user={user} />}
       </Container>
 
-      {/* Footer */}
-      <Box sx={{ py: 2, textAlign: 'center', bgcolor: '#ffffff', borderTop: '1px solid #e2e8f0', mt: 'auto' }}>
-        <Typography variant="caption" color="text.secondary">
-          Railway Management System &bull; Java 17 + Spring Boot 3.3.5 &bull; PostgreSQL &bull; React + MUI &bull; Razorpay Test Gateway
+      {/* Footer (Clean, no tech stack mentioned) */}
+      <Box sx={{ py: 2.5, textAlign: 'center', bgcolor: '#0b111e', borderTop: '1px solid #1e293b', mt: 'auto' }}>
+        <Typography variant="body2" sx={{ color: '#64748b', fontSize: '0.85rem' }}>
+          Railway Management System &bull; Safe Journeys &bull; Better Tomorrows
         </Typography>
       </Box>
 
-      {/* Role Switch / Login Dialog */}
-      <Dialog open={roleDialogOpen} onClose={() => setRoleDialogOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Switch Role / JWT Login</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Simulate logging in as different system roles to verify Spring Security RBAC and user data isolation.
-          </Typography>
-
-          {authError && <Alert severity="error" sx={{ mb: 2 }}>{authError}</Alert>}
-
-          <FormControl fullWidth size="small" sx={{ mb: 2, mt: 1 }}>
-            <InputLabel>System Role</InputLabel>
-            <Select
-              value={selectedRole}
-              label="System Role"
-              onChange={(e) => {
-                const r = e.target.value;
-                setSelectedRole(r);
-                if (r === 'STAFF') {
-                  setCustomUserId(99);
-                  setCustomEmail('staff@railways.gov.in');
-                } else if (r === 'ADMIN') {
-                  setCustomUserId(999);
-                  setCustomEmail('admin@railways.gov.in');
-                } else {
-                  setCustomUserId(1);
-                  setCustomEmail('passenger@railways.gov.in');
-                }
-              }}
-            >
-              <MenuItem value="CUSTOMER">CUSTOMER (Passenger)</MenuItem>
-              <MenuItem value="STAFF">STAFF (Concession Approver / TC)</MenuItem>
-              <MenuItem value="ADMIN">ADMIN (System Administrator)</MenuItem>
-            </Select>
-          </FormControl>
-
-          <TextField
-            fullWidth
-            label="User ID"
-            type="number"
-            value={customUserId}
-            onChange={(e) => setCustomUserId(Number(e.target.value))}
-            size="small"
-            sx={{ mb: 2 }}
-          />
-
-          <TextField
-            fullWidth
-            label="User Email"
-            type="email"
-            value={customEmail}
-            onChange={(e) => setCustomEmail(e.target.value)}
-            size="small"
-          />
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2.5 }}>
-          <Button onClick={() => setRoleDialogOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleSwitchRoleSubmit}>
-            Apply & Generate Token
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {/* Polished Login Modal */}
+      <LoginModal
+        open={loginModalOpen}
+        onClose={() => setLoginModalOpen(false)}
+        onLoginSuccess={(updatedUser) => setUser(updatedUser)}
+      />
     </Box>
   );
 }

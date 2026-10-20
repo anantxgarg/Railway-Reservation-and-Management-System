@@ -8,8 +8,6 @@ import {
 } from '@mui/material';
 import CardMembershipIcon from '@mui/icons-material/CardMembership';
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
-import CheckIcon from '@mui/icons-material/Check';
-import CloseIcon from '@mui/icons-material/Close';
 import { api } from '../api';
 
 const CONCESSION_CATEGORIES = [
@@ -85,7 +83,7 @@ export default function Concessions({ user }) {
         idCardNumber: form.idCardNumber,
         documentReferenceUrl: form.documentReferenceUrl
       });
-      setAlert({ type: 'success', msg: 'Concession application submitted successfully! Staff verification pending.' });
+      setAlert({ type: 'success', msg: 'Concession application submitted successfully! Verification pending.' });
       setForm({ ...form, bookingId: '' });
       loadData();
     } catch (err) {
@@ -121,15 +119,15 @@ export default function Concessions({ user }) {
   };
 
   return (
-    <Box sx={{ maxWidth: 1000, mx: 'auto', mt: 3, mb: 5 }}>
-      <Paper elevation={0} sx={{ p: 3, mb: 3, bgcolor: '#ffffff', borderRadius: 2, border: '1px solid #e2e8f0' }}>
+    <Box sx={{ maxWidth: 1000, mx: 'auto', mt: 1, mb: 5 }}>
+      <Paper elevation={0} sx={{ p: 3, mb: 3, bgcolor: '#111a2e', borderRadius: 3, border: '1px solid #1e293b' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-          <CardMembershipIcon sx={{ fontSize: 32, color: 'primary.main', mr: 1.5 }} />
-          <Typography variant="h5" color="primary">
+          <CardMembershipIcon sx={{ fontSize: 32, color: 'primary.light', mr: 1.5 }} />
+          <Typography variant="h5" sx={{ fontWeight: 700, color: '#f8fafc' }}>
             Concession Application & Verification Portal
           </Typography>
         </Box>
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{ color: '#94a3b8' }}>
           {isStaffOrAdmin 
             ? 'Officer Dashboard: Inspect submitted ID credentials and approve or reject ticket fare concessions.'
             : 'Passenger Portal: Apply for Student, Senior Citizen, or Armed Forces concessions with document proof.'}
@@ -137,7 +135,7 @@ export default function Concessions({ user }) {
       </Paper>
 
       {alert && (
-        <Alert severity={alert.type} sx={{ mb: 3 }} onClose={() => setAlert(null)}>
+        <Alert severity={alert.type} sx={{ mb: 3, bgcolor: alert.type === 'error' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(74, 222, 128, 0.1)' }} onClose={() => setAlert(null)}>
           {alert.msg}
         </Alert>
       )}
@@ -145,42 +143,42 @@ export default function Concessions({ user }) {
       {/* Staff View */}
       {isStaffOrAdmin ? (
         <Box>
-          <Typography variant="h6" sx={{ mb: 2 }} color="primary.main">
+          <Typography variant="h6" sx={{ mb: 2, color: '#f8fafc', fontWeight: 600 }}>
             Pending Concession Applications ({pendingList.length})
           </Typography>
           {loadingPending ? (
             <CircularProgress />
           ) : pendingList.length === 0 ? (
-            <Card variant="outlined" sx={{ p: 4, textAlign: 'center' }}>
-              <Typography color="text.secondary">All concession requests have been verified. No pending tasks.</Typography>
+            <Card variant="outlined" sx={{ p: 4, textAlign: 'center', bgcolor: '#111a2e', borderColor: '#1e293b' }}>
+              <Typography sx={{ color: '#94a3b8' }}>All concession requests have been verified. No pending tasks.</Typography>
             </Card>
           ) : (
-            <TableContainer component={Paper} variant="outlined">
+            <TableContainer component={Paper} variant="outlined" sx={{ bgcolor: '#111a2e', borderColor: '#1e293b' }}>
               <Table size="small">
-                <TableHead sx={{ bgcolor: '#f8fafc' }}>
+                <TableHead sx={{ bgcolor: '#0b111e' }}>
                   <TableRow>
-                    <TableCell sx={{ fontWeight: 600 }}>App #</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>Booking #</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>Category</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>ID Proof</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>Document URL</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }} align="center">Action</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>App #</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>Booking #</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>Category</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>ID Proof</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>Document URL</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }} align="center">Action</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {pendingList.map((app) => (
-                    <TableRow key={app.id}>
-                      <TableCell>#{app.id}</TableCell>
-                      <TableCell>#{app.bookingId}</TableCell>
+                    <TableRow key={app.id} hover sx={{ '&:hover': { bgcolor: '#162238' } }}>
+                      <TableCell sx={{ color: '#f8fafc' }}>#{app.id}</TableCell>
+                      <TableCell sx={{ color: '#f8fafc' }}>#{app.bookingId}</TableCell>
                       <TableCell>
                         <Chip label={app.category} color="primary" variant="outlined" size="small" />
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body2">{app.idCardType}</Typography>
-                        <Typography variant="caption" color="text.secondary">{app.idCardNumber}</Typography>
+                        <Typography variant="body2" sx={{ color: '#f8fafc' }}>{app.idCardType}</Typography>
+                        <Typography variant="caption" sx={{ color: '#64748b' }}>{app.idCardNumber}</Typography>
                       </TableCell>
                       <TableCell>
-                        <Typography variant="caption" sx={{ wordBreak: 'break-all' }}>
+                        <Typography variant="caption" sx={{ wordBreak: 'break-all', color: '#38bdf8' }}>
                           {app.documentReferenceUrl}
                         </Typography>
                       </TableCell>
@@ -205,11 +203,17 @@ export default function Concessions({ user }) {
           )}
 
           {/* Review Dialog */}
-          <Dialog open={!!selectedApp} onClose={() => setSelectedApp(null)} maxWidth="xs" fullWidth>
-            <DialogTitle>Review Concession #{selectedApp?.id}</DialogTitle>
+          <Dialog
+            open={!!selectedApp}
+            onClose={() => setSelectedApp(null)}
+            maxWidth="xs"
+            fullWidth
+            PaperProps={{ sx: { bgcolor: '#111a2e', borderRadius: 3, border: '1px solid #1e293b' } }}
+          >
+            <DialogTitle sx={{ color: '#f8fafc' }}>Review Concession #{selectedApp?.id}</DialogTitle>
             <DialogContent>
-              <Typography variant="body2" sx={{ mb: 2 }}>
-                Category: <strong>{selectedApp?.category}</strong> (Booking #{selectedApp?.bookingId})
+              <Typography variant="body2" sx={{ mb: 2, color: '#94a3b8' }}>
+                Category: <strong style={{ color: '#f8fafc' }}>{selectedApp?.category}</strong> (Booking #{selectedApp?.bookingId})
               </Typography>
               <FormControl fullWidth size="small" sx={{ mb: 2 }}>
                 <InputLabel>Decision</InputLabel>
@@ -231,8 +235,8 @@ export default function Concessions({ user }) {
                 size="small"
               />
             </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setSelectedApp(null)}>Cancel</Button>
+            <DialogActions sx={{ pb: 2.5, px: 3 }}>
+              <Button onClick={() => setSelectedApp(null)} sx={{ color: '#94a3b8' }}>Cancel</Button>
               <Button
                 variant="contained"
                 color={reviewAction === 'APPROVED' ? 'success' : 'error'}
@@ -249,8 +253,8 @@ export default function Concessions({ user }) {
         <Grid container spacing={3}>
           <Grid item xs={12} md={5}>
             <Card variant="outlined">
-              <CardContent>
-                <Typography variant="h6" gutterBottom color="primary.main">
+              <CardContent sx={{ p: 3 }}>
+                <Typography variant="h6" gutterBottom sx={{ color: '#f8fafc', fontWeight: 600 }}>
                   Apply for Concession
                 </Typography>
                 <form onSubmit={handleApply}>
@@ -310,6 +314,7 @@ export default function Concessions({ user }) {
                     type="submit"
                     disabled={submitting}
                     startIcon={submitting ? <CircularProgress size={20} color="inherit" /> : <VerifiedUserIcon />}
+                    sx={{ py: 1.2 }}
                   >
                     {submitting ? 'Submitting...' : 'Submit Application'}
                   </Button>
@@ -319,35 +324,35 @@ export default function Concessions({ user }) {
           </Grid>
 
           <Grid item xs={12} md={7}>
-            <Typography variant="h6" sx={{ mb: 2 }} color="primary.main">
+            <Typography variant="h6" sx={{ mb: 2, color: '#f8fafc', fontWeight: 600 }}>
               My Concession Applications
             </Typography>
             {loadingMy ? (
               <CircularProgress />
             ) : myConcessions.length === 0 ? (
-              <Card variant="outlined" sx={{ p: 4, textAlign: 'center' }}>
-                <Typography color="text.secondary">No concession applications submitted yet.</Typography>
+              <Card variant="outlined" sx={{ p: 4, textAlign: 'center', bgcolor: '#111a2e', borderColor: '#1e293b' }}>
+                <Typography sx={{ color: '#94a3b8' }}>No concession applications submitted yet.</Typography>
               </Card>
             ) : (
-              <TableContainer component={Paper} variant="outlined">
+              <TableContainer component={Paper} variant="outlined" sx={{ bgcolor: '#111a2e', borderColor: '#1e293b' }}>
                 <Table size="small">
-                  <TableHead sx={{ bgcolor: '#f8fafc' }}>
+                  <TableHead sx={{ bgcolor: '#0b111e' }}>
                     <TableRow>
-                      <TableCell sx={{ fontWeight: 600 }}>App #</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>Booking #</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>Category</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>Remarks</TableCell>
+                      <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>App #</TableCell>
+                      <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>Booking #</TableCell>
+                      <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>Category</TableCell>
+                      <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>Status</TableCell>
+                      <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>Remarks</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {myConcessions.map((app) => (
-                      <TableRow key={app.id}>
-                        <TableCell>#{app.id}</TableCell>
-                        <TableCell>#{app.bookingId}</TableCell>
-                        <TableCell>{app.category}</TableCell>
+                      <TableRow key={app.id} hover sx={{ '&:hover': { bgcolor: '#162238' } }}>
+                        <TableCell sx={{ color: '#f8fafc' }}>#{app.id}</TableCell>
+                        <TableCell sx={{ color: '#f8fafc' }}>#{app.bookingId}</TableCell>
+                        <TableCell sx={{ color: '#38bdf8' }}>{app.category}</TableCell>
                         <TableCell>{getStatusChip(app.status)}</TableCell>
-                        <TableCell>
+                        <TableCell sx={{ color: '#94a3b8' }}>
                           <Typography variant="caption">{app.remarks || '-'}</Typography>
                         </TableCell>
                       </TableRow>

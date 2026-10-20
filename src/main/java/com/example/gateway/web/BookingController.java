@@ -35,8 +35,9 @@ public class BookingController {
 
     /** Lets the UI show the discounted fare before the passenger commits. */
     @GetMapping("/concessions/preview")
-    public ConcessionResult preview(@RequestParam PassengerCategory category,
-                                    @RequestParam BigDecimal baseFare) {
+    public ConcessionResult preview(
+            @RequestParam(required = false, defaultValue = "GENERAL") PassengerCategory category,
+            @RequestParam(required = false, defaultValue = "1000.00") BigDecimal baseFare) {
         return concessionService.calculate(category, baseFare);
     }
 }

@@ -25,7 +25,7 @@ export const clearAuthSession = () => {
   localStorage.removeItem(ROLE_KEY);
 };
 
-export async function loginWithRole(role, userId = 1, email = null) {
+export async function loginWithRole(role, userId = 1, email = null, password = 'password123') {
   const defaultEmail = role === 'STAFF' 
     ? 'staff@railways.gov.in' 
     : role === 'ADMIN' 
@@ -33,24 +33,31 @@ export async function loginWithRole(role, userId = 1, email = null) {
       : 'passenger@railways.gov.in';
 
   const user = {
-    userId: role === 'STAFF' ? 99 : role === 'ADMIN' ? 999 : userId,
+    userId: role === 'STAFF' ? 99 : role === 'ADMIN' ? 999 : (userId || 1),
     email: email || defaultEmail,
-    role: role
+    username: email || defaultEmail,
+    password: password || 'password123',
+    role: role || 'CUSTOMER'
   };
 
-  const response = await fetch('/api/auth/token', {
+  const response = await fetch('/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(user)
   });
 
   if (!response.ok) {
-    throw new Error('Failed to generate authentication token');
+    throw new Error('Authentication failed. Please verify credentials.');
   }
 
   const data = await response.json();
-  setAuthSession(data.token, user);
-  return { token: data.token, user };
+  const sessionUser = {
+    userId: data.userId || user.userId,
+    email: data.email || user.email,
+    role: data.role || user.role
+  };
+  setAuthSession(data.token, sessionUser);
+  return { token: data.token, user: sessionUser };
 }
 
 export async function apiRequest(endpoint, method = 'GET', body = null) {

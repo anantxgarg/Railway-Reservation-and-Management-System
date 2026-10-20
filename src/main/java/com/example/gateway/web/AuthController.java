@@ -17,13 +17,15 @@ public class AuthController {
 
     private final JwtUtil jwtUtil;
 
-    public record TokenRequest(Integer userId, String email, String role) {}
+    public record TokenRequest(Integer userId, String email, String username, String role, String password) {}
 
-    @PostMapping("/token")
+    @PostMapping({"/token", "/login"})
     public ResponseEntity<Map<String, Object>> generateToken(@RequestBody(required = false) TokenRequest req) {
         Integer userId = (req != null && req.userId() != null) ? req.userId() : 1;
-        String email = (req != null && req.email() != null) ? req.email() : "customer@example.com";
-        String role = (req != null && req.role() != null) ? req.role().toUpperCase() : "CUSTOMER";
+        String email = (req != null && req.email() != null && !req.email().isBlank()) ? req.email()
+                     : (req != null && req.username() != null && !req.username().isBlank()) ? req.username() 
+                     : "passenger@railways.gov.in";
+        String role = (req != null && req.role() != null && !req.role().isBlank()) ? req.role().toUpperCase() : "CUSTOMER";
 
         String token = jwtUtil.generateToken(userId, email, role);
 
