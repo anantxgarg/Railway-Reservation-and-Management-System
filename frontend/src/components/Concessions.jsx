@@ -8,7 +8,7 @@ import {
 } from '@mui/material';
 import CardMembershipIcon from '@mui/icons-material/CardMembership';
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
-import { api } from '../api';
+import { api, bookingApi } from '../api';
 
 const CONCESSION_CATEGORIES = [
   { value: 'STUDENT', label: 'Student (25%)' },
@@ -23,13 +23,17 @@ export default function Concessions({ user }) {
 
   // Customer state
   const [form, setForm] = useState({
-    bookingId: '',
+    pnr: '',
+    passengerId: '',
     category: 'STUDENT',
     idCardType: 'STUDENT_ID',
     idCardNumber: 'STU-2026-987',
     documentReferenceUrl: 'https://docs.railways.gov.in/proofs/student-id.pdf'
   });
   const [submitting, setSubmitting] = useState(false);
+  // passengers of the PNR being applied for, from the booking service
+  const [passengers, setPassengers] = useState([]);
+  const [pnrError, setPnrError] = useState(null);
   const [myConcessions, setMyConcessions] = useState([]);
   const [loadingMy, setLoadingMy] = useState(false);
 
@@ -71,20 +75,35 @@ export default function Concessions({ user }) {
     loadData();
   }, [user]);
 
+  useEffect(() => {
+    setPassengers([]);
+    setPnrError(null);
+    setForm((f) => ({ ...f, passengerId: '' }));
+    if (form.pnr.length !== 10) return undefined;
+    let current = true;
+    bookingApi.get(form.pnr)
+      .then((b) => current && setPassengers(b.passengers.filter((p) => p.status !== 'CANCELLED')))
+      .catch((err) => current && setPnrError(err.message));
+    return () => {
+      current = false;
+    };
+  }, [form.pnr]);
+
   const handleApply = async (e) => {
     e.preventDefault();
     setSubmitting(true);
     setAlert(null);
     try {
       await api.applyConcession({
-        bookingId: Number(form.bookingId),
+        pnr: form.pnr,
+        passengerId: Number(form.passengerId),
         category: form.category,
         idCardType: form.idCardType,
         idCardNumber: form.idCardNumber,
         documentReferenceUrl: form.documentReferenceUrl
       });
       setAlert({ type: 'success', msg: 'Concession application submitted successfully! Verification pending.' });
-      setForm({ ...form, bookingId: '' });
+      setForm({ ...form, pnr: '', passengerId: '' });
       loadData();
     } catch (err) {
       setAlert({ type: 'error', msg: err.message || 'Failed to submit concession application' });
@@ -158,7 +177,7 @@ export default function Concessions({ user }) {
                 <TableHead sx={{ bgcolor: '#0b111e' }}>
                   <TableRow>
                     <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>App #</TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>Booking #</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>PNR / Passenger</TableCell>
                     <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>Category</TableCell>
                     <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>ID Proof</TableCell>
                     <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>Document URL</TableCell>
@@ -169,7 +188,10 @@ export default function Concessions({ user }) {
                   {pendingList.map((app) => (
                     <TableRow key={app.id} hover sx={{ '&:hover': { bgcolor: '#162238' } }}>
                       <TableCell sx={{ color: '#f8fafc' }}>#{app.id}</TableCell>
-                      <TableCell sx={{ color: '#f8fafc' }}>#{app.bookingId}</TableCell>
+                      <TableCell sx={{ color: '#f8fafc' }}>
+                        {app.pnr}
+                        <Typography variant="caption" display="block" sx={{ color: '#64748b' }}>{app.passengerName}</Typography>
+                      </TableCell>
                       <TableCell>
                         <Chip label={app.category} color="primary" variant="outlined" size="small" />
                       </TableCell>
@@ -213,7 +235,7 @@ export default function Concessions({ user }) {
             <DialogTitle sx={{ color: '#f8fafc' }}>Review Concession #{selectedApp?.id}</DialogTitle>
             <DialogContent>
               <Typography variant="body2" sx={{ mb: 2, color: '#94a3b8' }}>
-                Category: <strong style={{ color: '#f8fafc' }}>{selectedApp?.category}</strong> (Booking #{selectedApp?.bookingId})
+                Category: <strong style={{ color: '#f8fafc' }}>{selectedApp?.category}</strong> for {selectedApp?.passengerName} (PNR {selectedApp?.pnr})
               </Typography>
               <FormControl fullWidth size="small" sx={{ mb: 2 }}>
                 <InputLabel>Decision</InputLabel>
@@ -260,17 +282,33 @@ export default function Concessions({ user }) {
                 <form onSubmit={handleApply}>
                   <TextField
                     fullWidth
-                    label="Booking ID / PNR"
-                    value={form.bookingId}
-                    onChange={(e) => setForm({ ...form, bookingId: e.target.value })}
+                    label="PNR"
+                    value={form.pnr}
+                    onChange={(e) => setForm({ ...form, pnr: e.target.value.replace(/\D/g, '') })}
                     required
-                    type="number"
+                    inputProps={{ inputMode: 'numeric', maxLength: 10 }}
+                    error={!!pnrError}
+                    helperText={pnrError}
                     size="small"
                     sx={{ mb: 2 }}
                   />
-                  <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-                    <InputLabel>Concession Category</InputLabel>
+                  <FormControl fullWidth size="small" sx={{ mb: 2 }} disabled={!passengers.length} required>
+                    <InputLabel id="concession-passenger-label">Passenger</InputLabel>
                     <Select
+                      labelId="concession-passenger-label"
+                      value={form.passengerId}
+                      label="Passenger"
+                      onChange={(e) => setForm({ ...form, passengerId: e.target.value })}
+                    >
+                      {passengers.map((p) => (
+                        <MenuItem key={p.passengerId} value={p.passengerId}>{p.passengerNo}. {p.name} ({p.age})</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+                    <InputLabel id="concession-category-label">Concession Category</InputLabel>
+                    <Select
+                      labelId="concession-category-label"
                       value={form.category}
                       label="Concession Category"
                       onChange={(e) => setForm({ ...form, category: e.target.value })}
@@ -312,7 +350,7 @@ export default function Concessions({ user }) {
                     fullWidth
                     variant="contained"
                     type="submit"
-                    disabled={submitting}
+                    disabled={submitting || !form.passengerId}
                     startIcon={submitting ? <CircularProgress size={20} color="inherit" /> : <VerifiedUserIcon />}
                     sx={{ py: 1.2 }}
                   >
@@ -339,7 +377,7 @@ export default function Concessions({ user }) {
                   <TableHead sx={{ bgcolor: '#0b111e' }}>
                     <TableRow>
                       <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>App #</TableCell>
-                      <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>Booking #</TableCell>
+                      <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>PNR / Passenger</TableCell>
                       <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>Category</TableCell>
                       <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>Status</TableCell>
                       <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>Remarks</TableCell>
@@ -349,7 +387,10 @@ export default function Concessions({ user }) {
                     {myConcessions.map((app) => (
                       <TableRow key={app.id} hover sx={{ '&:hover': { bgcolor: '#162238' } }}>
                         <TableCell sx={{ color: '#f8fafc' }}>#{app.id}</TableCell>
-                        <TableCell sx={{ color: '#f8fafc' }}>#{app.bookingId}</TableCell>
+                        <TableCell sx={{ color: '#f8fafc' }}>
+                          {app.pnr}
+                          <Typography variant="caption" display="block" sx={{ color: '#64748b' }}>{app.passengerName}</Typography>
+                        </TableCell>
                         <TableCell sx={{ color: '#38bdf8' }}>{app.category}</TableCell>
                         <TableCell>{getStatusChip(app.status)}</TableCell>
                         <TableCell sx={{ color: '#94a3b8' }}>

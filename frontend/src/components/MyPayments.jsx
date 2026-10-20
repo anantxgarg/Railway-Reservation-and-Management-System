@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Box, Card, Typography, Table, TableBody,
   TableCell, TableContainer, TableHead, TableRow, Paper,
-  Chip, CircularProgress, Alert, Button
+  Chip, CircularProgress, Alert, Button, Link
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import ReceiptIcon from '@mui/icons-material/ReceiptLong';
@@ -35,8 +35,10 @@ export default function MyPayments({ user }) {
       return <Chip label="PAID" color="success" size="small" sx={{ fontWeight: 600 }} />;
     } else if (status === 'CREATED') {
       return <Chip label="PENDING" color="warning" size="small" sx={{ fontWeight: 600 }} />;
+    } else if (status === 'PARTIALLY_REFUNDED') {
+      return <Chip label="PARTLY REFUNDED" color="info" size="small" sx={{ fontWeight: 600 }} />;
     } else {
-      return <Chip label={status || 'FAILED'} color="error" size="small" sx={{ fontWeight: 600 }} />;
+      return <Chip label={status || 'UNKNOWN'} color="default" size="small" sx={{ fontWeight: 600 }} />;
     }
   };
 
@@ -50,7 +52,7 @@ export default function MyPayments({ user }) {
               My Payment Transactions
             </Typography>
             <Typography variant="body2" sx={{ color: '#94a3b8' }}>
-              Viewing verified payments for account: {user.email} (User #{user.userId})
+              Payments made by {user.email}
             </Typography>
           </Box>
         </Box>
@@ -79,11 +81,10 @@ export default function MyPayments({ user }) {
             <TableHead sx={{ bgcolor: '#0b111e' }}>
               <TableRow>
                 <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>Payment ID</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>Booking #</TableCell>
+                <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>PNR</TableCell>
                 <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>Gateway Order</TableCell>
                 <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>Amount</TableCell>
                 <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>Status</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>Timestamp</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -94,7 +95,9 @@ export default function MyPayments({ user }) {
                       {p.razorpayPaymentId || `PAY-${p.id}`}
                     </Typography>
                   </TableCell>
-                  <TableCell sx={{ color: '#f8fafc' }}>#{p.bookingId}</TableCell>
+                  <TableCell>
+                    <Link href={`#/pnr/${p.pnr}`} underline="hover" sx={{ color: '#f8fafc' }}>{p.pnr}</Link>
+                  </TableCell>
                   <TableCell>
                     <Typography variant="caption" sx={{ color: '#64748b' }}>
                       {p.razorpayOrderId}
@@ -102,15 +105,10 @@ export default function MyPayments({ user }) {
                   </TableCell>
                   <TableCell>
                     <Typography variant="body2" fontWeight={600} sx={{ color: '#4ade80' }}>
-                      ₹{p.amountInPaise ? (p.amountInPaise / 100).toFixed(2) : '0.00'}
+                      ₹{Number(p.amount).toFixed(2)}
                     </Typography>
                   </TableCell>
                   <TableCell>{getStatusChip(p.status)}</TableCell>
-                  <TableCell>
-                    <Typography variant="caption" sx={{ color: '#94a3b8' }}>
-                      {p.updatedAt ? new Date(p.updatedAt).toLocaleString() : 'N/A'}
-                    </Typography>
-                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

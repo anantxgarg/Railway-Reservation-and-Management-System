@@ -10,7 +10,7 @@ Full-stack Railway Reservation & Management System featuring ticket booking, PNR
 |---|---|---|---|---|
 | **Team 1** | Users & Auth | Authentication, JWT & refresh tokens, RBAC, password reset, audit logging, identity database | Node.js, Express, PostgreSQL, MongoDB, Brevo API | Backend & database implemented; frontend pending |
 | **Team 2** | Trains, Stations, Routes | Master train catalog, stations, routes, schedules, coaches, seat layouts | TBD | Not started |
-| **Team 3** | Booking, PNR, Seats | Booking management, PNR generation, seat allocation, waitlist | PostgreSQL, Spring Boot | Database and API implemented & tested; frontend pending |
+| **Team 3** | Booking, PNR, Seats | Booking management, PNR generation, seat allocation, waitlist | PostgreSQL, Spring Boot, React + MUI | Database, API and booking screens implemented & tested |
 | **Team 4** | Payments & Refunds | Razorpay payment gateway integration, concession calculations, refund policies | Spring Boot, Razorpay, React + MUI | Implemented |
 | **Team 5** | Reports & Analytics | Reports, analytics, admin dashboards | TBD | Not started |
 | **Team 6** | Notifications, Status, Feedback | Email / SMS notifications, live train status, feedback | TBD | Not started |
@@ -35,6 +35,7 @@ Start Team 4's Spring Boot app afterwards; it creates its own tables on startup.
 | Users & Auth (Team 1) | `backend/` | 3000 | `npm start` (needs `.env`, see Team 1) |
 | Booking (Team 3) | `booking-service/` | 8082 | `./mvnw spring-boot:run` |
 | Payments (Team 4) | repo root | 8081 | `mvn spring-boot:run` (needs Razorpay test keys) |
+| Frontend (all teams) | `frontend/` | 5173 | `npm ci && npm run dev`, then open http://localhost:5173 |
 
 All three use the same `PG*` variables for the database. They must also share **one `JWT_SECRET`**: Team 1 signs logins with it, and the other two verify the tokens with it.
 
@@ -222,7 +223,7 @@ Flyway creates this app's tables (`V1`, `V2`). It baselines at version 0, so it 
 
 Logins are Team 1's. Every endpoint except the webhook and the concession preview needs `Authorization: Bearer <token>` from Team 1's `POST /api/auth/login`. The app's old development login (`/api/auth/login` on this port) has been removed.
 
-**The frontend is not updated yet.** The React app (`frontend/`) and `src/main/resources/static/` still call the removed booking and login endpoints. Team 3's booking screens and the PNR-based payment step replace them next.
+The screens are in the shared React app, [`frontend/`](frontend/README.md): `components/checkout.js` (Razorpay Checkout for a PNR), `MyPayments`, `Refunds` and `Concessions`. The app no longer serves a copy of the frontend from `src/main/resources/static/`.
 
 ### Flow
 
