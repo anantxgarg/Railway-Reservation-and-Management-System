@@ -50,7 +50,7 @@ COMMENT ON COLUMN booking.pnr IS 'Passenger Name Record - unique booking identif
 COMMENT ON COLUMN booking.user_id IS 'Customer who made the booking (C1 users)';
 COMMENT ON COLUMN booking.from_seq IS 'Boarding stop: route_station.stop_seq of the run''s route';
 COMMENT ON COLUMN booking.to_seq IS 'Alighting stop: route_station.stop_seq of the run''s route';
-COMMENT ON COLUMN booking.total_fare IS 'Sum of passenger_fare over the PNR''s passengers';
+COMMENT ON COLUMN booking.total_fare IS 'Amount to pay: fares of passengers not cancelled while HELD; the amount paid once CONFIRMED';
 COMMENT ON COLUMN booking.hold_expires_at IS 'When an unpaid HELD booking expires (NULL otherwise)';
 
 -- ---------------------------------------------------------------------

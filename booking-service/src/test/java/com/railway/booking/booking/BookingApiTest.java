@@ -204,6 +204,26 @@ class BookingApiTest extends ApiTestBase {
     }
 
     @Test
+    void paidBookingsAreCancelledThroughRefundsNotHere() throws Exception {
+        String pnr = book(CUSTOMER, runId("12127", 6), "2S", "CSMT", "PUNE", 1);
+        jdbc.queryForObject("SELECT confirm_booking(?)", java.math.BigDecimal.class, pnr);
+        cancel(CUSTOMER, pnr, null)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("PAID_BOOKING"));
+        getBooking(CUSTOMER, pnr).andExpect(jsonPath("$.status").value("CONFIRMED"));
+    }
+
+    @Test
+    void cancellingBeforePaymentLowersTheAmountToPay() throws Exception {
+        String pnr = book(CUSTOMER, runId("12127", 6), "2S", "CSMT", "PUNE", 2);
+        String fare = JsonPath.read(getBooking(CUSTOMER, pnr).andReturn().getResponse().getContentAsString(),
+                "$.passengers[0].fare").toString();
+        cancel(CUSTOMER, pnr, "{\"passengerIds\": [%d]}".formatted(passengerId(pnr, 2)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.booking.totalFare").value(Double.parseDouble(fare)));
+    }
+
+    @Test
     void otherCustomersCannotCancel() throws Exception {
         String pnr = book(CUSTOMER, runId("12127", 6), "2S", "CSMT", "PUNE", 1);
         cancel(otherCustomer(), pnr, null).andExpect(status().isNotFound());

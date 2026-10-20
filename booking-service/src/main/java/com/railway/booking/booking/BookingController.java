@@ -49,7 +49,10 @@ public class BookingController {
         return service.get(user, pnr);
     }
 
-    /** Cancel the whole booking, or only the listed passengers. The owner, or STAFF/ADMIN. */
+    /**
+     * Cancel an unpaid booking, whole or only the listed passengers. The owner, or STAFF/ADMIN.
+     * Paid bookings are cancelled through Team 4's refunds endpoint (409 PAID_BOOKING here).
+     */
     @PostMapping("/{pnr}/cancel")
     public CancelResult cancel(@AuthenticationPrincipal AuthUser user, @PathVariable String pnr,
                                @RequestBody(required = false) CancelRequest request) {

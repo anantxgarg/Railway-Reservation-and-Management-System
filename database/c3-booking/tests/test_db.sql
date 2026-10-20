@@ -336,20 +336,27 @@ SELECT pg_temp.expect('promotion: RAC 1 gets the freed berth, WL 1 moves to RAC,
     LIKE 'CNF/A1/%,RAC 1,RAC 2,RAC 3,RAC 4,WL 1');
 SELECT pg_temp.expect('cancel: a partly cancelled booking stays HELD with 5 active passengers',
     (SELECT status = 'HELD' AND active_passengers = 5 FROM v_user_bookings WHERE pnr = :'r1'));
+SELECT pg_temp.expect('total_fare: an unpaid booking stops charging for a cancelled passenger',
+    (SELECT total_fare FROM booking WHERE pnr = :'r1') = 5 * calc_fare(:tn7, '2A', 'GN', 1, 4));
 SELECT pg_temp.expect('queues: no two active passengers share a queue number',
     NOT EXISTS (SELECT 1 FROM passenger p JOIN booking b USING (pnr)
                 WHERE p.status IN ('RAC', 'WAITLIST') AND b.status IN ('HELD', 'CONFIRMED')
                 GROUP BY b.run_id, b.class_code, b.quota_code, p.status, p.queue_no HAVING count(*) > 1));
 
 SELECT count(*) AS n FROM cancel_passengers(:'r1') \gset
-SELECT pg_temp.expect('cancel whole PNR: remaining 5 cancelled, booking CANCELLED, 5 more promoted',
-    :n = 5 AND (SELECT status = 'CANCELLED' FROM booking WHERE pnr = :'r1')
+SELECT pg_temp.expect('cancel whole PNR: remaining 5 cancelled, booking CANCELLED with nothing to pay, 5 more promoted',
+    :n = 5 AND (SELECT status = 'CANCELLED' AND total_fare = 0 FROM booking WHERE pnr = :'r1')
     AND (SELECT count(*) FROM passenger WHERE pnr = :'r9' AND status = 'CONFIRMED') = 6);
 SELECT pg_temp.expect_error('cancel: already cancelled booking rejected',
     format('SELECT * FROM cancel_passengers(%L)', :'r1'), '55000');
 SELECT pg_temp.expect_error('cancel: passenger from another PNR rejected',
     format('SELECT * FROM cancel_passengers(%L, ARRAY[(SELECT min(passenger_id) FROM passenger WHERE pnr = %L)])', :'r9', :'a1'),
     '22023');
+SELECT total_fare AS a1_paid FROM booking WHERE pnr = :'a1' \gset
+SELECT * FROM cancel_passengers(:'a1',
+    ARRAY[(SELECT min(passenger_id) FROM passenger WHERE pnr = :'a1')]) AS c \gset p_
+SELECT pg_temp.expect('cancel on a paid booking: reported as paid, total_fare stays the amount paid',
+    :'p_booking_was_paid' = 't' AND (SELECT total_fare FROM booking WHERE pnr = :'a1') = :a1_paid);
 
 -- ------------------------------------------------------- expire_holds
 CALL expire_holds(NULL);

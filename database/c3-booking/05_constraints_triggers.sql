@@ -128,7 +128,10 @@ CREATE TRIGGER trg_passenger_guard_update
     FOR EACH ROW EXECUTE FUNCTION trg_passenger_guard_update();
 
 -- ---------------------------------------------------------------------
--- booking.total_fare = sum of passenger_fare, kept up to date
+-- booking.total_fare is what the customer pays. While the booking is
+-- HELD it follows the fares of the passengers not cancelled, so dropping
+-- a passenger before paying lowers the price. Once CONFIRMED it is the
+-- amount paid and no longer changes; refunds are recorded by Team 4.
 -- ---------------------------------------------------------------------
 CREATE FUNCTION trg_passenger_sync_total() RETURNS trigger
 LANGUAGE plpgsql AS $$
@@ -136,13 +139,14 @@ DECLARE
     v_pnr VARCHAR(10) := CASE WHEN TG_OP = 'DELETE' THEN OLD.pnr ELSE NEW.pnr END;
 BEGIN
     UPDATE booking
-    SET total_fare = (SELECT coalesce(sum(passenger_fare), 0) FROM passenger WHERE pnr = v_pnr)
-    WHERE pnr = v_pnr;
+    SET total_fare = (SELECT coalesce(sum(passenger_fare), 0) FROM passenger
+                      WHERE pnr = v_pnr AND status <> 'CANCELLED')
+    WHERE pnr = v_pnr AND status = 'HELD';
     RETURN NULL;
 END $$;
 
 CREATE TRIGGER trg_passenger_sync_total
-    AFTER INSERT OR DELETE OR UPDATE OF passenger_fare ON passenger
+    AFTER INSERT OR DELETE OR UPDATE OF passenger_fare, status ON passenger
     FOR EACH ROW EXECUTE FUNCTION trg_passenger_sync_total();
 
 -- ---------------------------------------------------------------------

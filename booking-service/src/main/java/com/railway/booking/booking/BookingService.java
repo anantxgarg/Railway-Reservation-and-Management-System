@@ -18,6 +18,7 @@ import com.railway.booking.network.NetworkRepository;
 import com.railway.booking.security.AuthUser;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -67,11 +68,21 @@ public class BookingService {
         return bookings.byUser(user.userId());
     }
 
+    /**
+     * Cancels passengers of an unpaid booking. A paid (CONFIRMED) booking is
+     * cancelled through Team 4's POST /api/refunds instead, which calls
+     * cancel_passengers in the same transaction as the refund, so a
+     * cancellation can never happen without its refund or the other way round.
+     */
     @Transactional
     public CancelResult cancel(AuthUser user, String pnr, List<Integer> passengerIds) {
-        int owner = bookings.ownerOf(pnr).orElseThrow(() -> notFound(pnr));
-        if (owner != user.userId() && !user.isStaff()) {
+        BookingRepository.Ownership booking = bookings.ownership(pnr).orElseThrow(() -> notFound(pnr));
+        if (booking.userId() != user.userId() && !user.isStaff()) {
             throw notFound(pnr);
+        }
+        if ("CONFIRMED".equals(booking.status())) {
+            throw new ApiException(HttpStatus.CONFLICT, "PAID_BOOKING",
+                    "PNR " + pnr + " is paid; cancel it through POST /api/refunds so the refund is issued");
         }
         var rows = bookings.cancel(pnr, passengerIds);
         List<CancelledPassenger> cancelled = rows.stream().map(BookingRepository.CancelRow::passenger).toList();

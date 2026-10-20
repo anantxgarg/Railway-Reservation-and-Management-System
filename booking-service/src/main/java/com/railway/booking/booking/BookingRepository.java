@@ -37,9 +37,13 @@ public class BookingRepository {
                 userId, runId, classCode, quotaCode, fromSeq, toSeq, passengersJson);
     }
 
-    public Optional<Integer> ownerOf(String pnr) {
-        return jdbc.queryForList("SELECT user_id FROM booking WHERE pnr = ?", Integer.class, pnr)
-                .stream().findFirst();
+    /** Who owns a booking and its status, for access checks. */
+    public record Ownership(int userId, String status) {
+    }
+
+    public Optional<Ownership> ownership(String pnr) {
+        return jdbc.query("SELECT user_id, status::TEXT FROM booking WHERE pnr = ?",
+                (rs, i) -> new Ownership(rs.getInt(1), rs.getString(2)), pnr).stream().findFirst();
     }
 
     public Optional<BookingDetail> detail(String pnr) {
