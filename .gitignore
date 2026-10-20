@@ -37,3 +37,4 @@ credentials.properties
 ### OS Files ###
 Thumbs.db
 .DS_Store
+reset_postgres_password.bat
