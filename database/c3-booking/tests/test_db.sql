@@ -244,6 +244,9 @@ SELECT pg_temp.expect('create_booking: total_fare is the sum of passenger fares'
     (SELECT total_fare FROM booking WHERE pnr = :'a1') = 6 * calc_fare(:raj5, '1A', 'GN', 1, 4));
 SELECT pg_temp.expect('create_booking: full class with no RAC puts passengers on the waitlist (WL 1, WL 2)',
     (SELECT string_agg(status_label, ',' ORDER BY passenger_no) FROM v_pnr_status WHERE pnr = :'a4') = 'WL 1,WL 2');
+SELECT pg_temp.expect('v_pnr_status: current_position only for queued passengers',
+    (SELECT bool_and(current_position IS NULL) FROM v_pnr_status WHERE pnr = :'a1')
+    AND (SELECT array_agg(current_position ORDER BY passenger_no) FROM v_pnr_status WHERE pnr = :'a4') = '{1,2}');
 SELECT pg_temp.expect('availability: 0 seats, 2 waiting for 1A on that run',
     (SELECT available_seats = 0 AND waitlist_count = 2 FROM availability(:raj5, '1A', 1, 4)));
 

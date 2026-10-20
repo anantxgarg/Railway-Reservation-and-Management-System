@@ -10,7 +10,7 @@ Full-stack Railway Reservation & Management System featuring ticket booking, PNR
 |---|---|---|---|---|
 | **Team 1** | Users & Auth | Authentication, JWT & refresh tokens, RBAC, password reset, audit logging, identity database | Node.js, Express, PostgreSQL, MongoDB, Brevo API | Backend & database implemented; frontend pending |
 | **Team 2** | Trains, Stations, Routes | Master train catalog, stations, routes, schedules, coaches, seat layouts | TBD | Not started |
-| **Team 3** | Booking, PNR, Seats | Booking management, PNR generation, seat allocation, waitlist | PostgreSQL; Spring Boot (planned) | Database implemented & tested; API in progress |
+| **Team 3** | Booking, PNR, Seats | Booking management, PNR generation, seat allocation, waitlist | PostgreSQL, Spring Boot | Database and API implemented & tested; frontend pending |
 | **Team 4** | Payments & Refunds | Razorpay payment gateway integration, concession calculations, refund policies | Spring Boot, Razorpay, React + MUI | Implemented |
 | **Team 5** | Reports & Analytics | Reports, analytics, admin dashboards | TBD | Not started |
 | **Team 6** | Notifications, Status, Feedback | Email / SMS notifications, live train status, feedback | TBD | Not started |
@@ -171,12 +171,20 @@ Configured in `database/c1-identity/seed_dev_users.sql` (all use password: `Rail
 
 ## Team 3 — Booking, PNR & Seats
 
-Database for bookings, passengers and seat allocation (tables, triggers, procedures, views), in [`database/c3-booking/`](database/c3-booking/README.md). It also holds placeholder copies of the network tables (Team 2) and `concession_rule` (Team 4) until those teams take them over.
-
-Run the database tests (builds and drops its own `railway_c3_test` database):
+Search, availability, booking, PNR status and cancellation, with seat allocation, RAC and waitlist.
+- **Database:** [`database/c3-booking/`](database/c3-booking/README.md) holds the tables, triggers, procedures and views where the booking rules live. It also has placeholder copies of the network tables (Team 2) and `concession_rule` (Team 4) until those teams take them over.
+- **API:** [`booking-service/`](booking-service/README.md), Spring Boot on port 8082. It accepts Team 1's login tokens, so it needs the same `JWT_SECRET`.
 
 ```bash
-PGHOST=localhost PGUSER=postgres ./database/c3-booking/tests/run_tests.sh
+PGHOST=localhost PGUSER=postgres ./database/setup.sh                      # shared database
+cd booking-service && PGHOST=localhost PGUSER=postgres JWT_SECRET=<Team 1's secret> ./mvnw spring-boot:run
+```
+
+Tests:
+
+```bash
+PGHOST=localhost PGUSER=postgres ./database/c3-booking/tests/run_tests.sh   # database; builds and drops railway_c3_test
+PGHOST=localhost PGUSER=postgres ./booking-service/run_tests.sh             # API; rebuilds railway_test
 ```
 
 ---

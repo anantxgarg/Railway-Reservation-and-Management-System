@@ -15,7 +15,7 @@ PostgreSQL tables, seed data and tests for the booking module. Table and column 
 | `06_procedures.sql` | `create_booking`, `confirm_booking`, `cancel_passengers`, `promote_queue`, `expire_holds` | Team 3 |
 | `07_views.sql` | `v_pnr_status`, `v_user_bookings`, `v_run_availability`, `v_run_route` | Team 3 |
 | `seed_dev.sql` | Classes, quotas, concessions, 3 trains / routes, runs for the next 30 days, coaches, 1,202 seats | Team 3 (network data is placeholder) |
-| `tests/run_tests.sh`, `tests/test_db.sql` | Builds a throwaway database; 89 checks plus a 10-session race for the last berth | Team 3 |
+| `tests/run_tests.sh`, `tests/test_db.sql` | Builds a throwaway database; 90 checks plus a 10-session race for the last berth | Team 3 |
 
 Users are not seeded here. Booking uses C1's dev accounts (`customer@example.com`, password `Railway@Dev123`).
 
@@ -26,7 +26,7 @@ Users are not seeded here. Booking uses C1's dev accounts (`customer@example.com
 | Book | `SELECT create_booking(user_id, run_id, class, quota, from_seq, to_seq, passengers_json)` | New PNR, `HELD` for 15 minutes. Each passenger gets a berth if one is free for the whole journey, else RAC, else waitlist. |
 | Pay | `SELECT confirm_booking(pnr)` | `HELD` → `CONFIRMED`; returns the amount. Safe to call twice. Fails once the hold has expired. |
 | Cancel | `SELECT * FROM cancel_passengers(pnr, ARRAY[ids])` (or `NULL` for all) | Frees berths, cancels the booking when nobody is left, promotes the queue. Returns one row per cancelled passenger for the refund. |
-| Expire | `CALL expire_holds()` | Unpaid holds past expiry → `EXPIRED`, berths go to the queue. The booking service runs it every minute. |
+| Expire | `CALL expire_holds()` | Unpaid holds past expiry → `EXPIRED`, berths go to the queue. [`booking-service`](../../booking-service/README.md) runs it every minute. |
 | Status | `SELECT * FROM v_pnr_status WHERE pnr = ...` | One row per passenger, `status_label` like `CNF/B1/23/LB`, `RAC 3`, `WL 12`. |
 
 `passengers_json` is an array of 1-6 objects: `{"name": "Asha Rao", "age": 34, "gender": "F", "concession_id": null}`.

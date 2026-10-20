@@ -18,8 +18,9 @@ COMMENT ON VIEW v_run_route IS 'Each train run with its route (derived from trai
 -- ---------------------------------------------------------------------
 -- v_pnr_status
 --   queue_no is the number given when the passenger joined the queue;
---   current_position is where they are now. status_label reads like a
---   ticket: CNF/B1/23/LB, RAC 3, WL 12, CAN.
+--   current_position is where they are now (NULL unless RAC or
+--   waitlisted). status_label reads like a ticket: CNF/B1/23/LB,
+--   RAC 3, WL 12, CAN.
 -- ---------------------------------------------------------------------
 CREATE VIEW v_pnr_status AS
 SELECT b.pnr,
@@ -75,11 +76,10 @@ LEFT JOIN seat s         ON s.seat_id = sa.seat_id
 LEFT JOIN LATERAL (
     SELECT count(*)::INTEGER AS current_position
     FROM passenger q JOIN booking qb ON qb.pnr = q.pnr
-    WHERE p.status IN ('RAC', 'WAITLIST')
-      AND qb.run_id = b.run_id AND qb.class_code = b.class_code AND qb.quota_code = b.quota_code
+    WHERE qb.run_id = b.run_id AND qb.class_code = b.class_code AND qb.quota_code = b.quota_code
       AND qb.status IN ('HELD', 'CONFIRMED')
       AND q.status = p.status AND q.queue_no <= p.queue_no
-) pos ON TRUE;
+) pos ON p.status IN ('RAC', 'WAITLIST');
 
 COMMENT ON VIEW v_pnr_status IS 'PNR status: one row per passenger with seat or current queue position';
 
