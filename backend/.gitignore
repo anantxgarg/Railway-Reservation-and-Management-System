@@ -1,0 +1,6 @@
+# Railway Backend
+node_modules/
+.env
+*.log
+coverage/
+dist/
