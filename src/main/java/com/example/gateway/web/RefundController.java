@@ -21,7 +21,6 @@ public class RefundController {
 
     /** Shows the passenger or staff how much would be refunded without committing. */
     @GetMapping("/preview/{bookingId}")
-    @PreAuthorize("hasAnyRole('CUSTOMER', 'STAFF', 'ADMIN')")
     public RefundQuote preview(@PathVariable Long bookingId) {
         return refundService.quote(bookingId);
     }

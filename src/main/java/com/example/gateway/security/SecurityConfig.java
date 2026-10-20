@@ -29,14 +29,16 @@ public class SecurityConfig {
                         .frameOptions(frame -> frame.disable()))
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // Static web resources
-                        .requestMatchers("/", "/index.html", "/css/**", "/js/**", "/favicon.ico", "/*.jpg").permitAll()
+                        // Static web resources (including React/Vite assets)
+                        .requestMatchers("/", "/index.html", "/css/**", "/js/**", "/assets/**", "/favicon.ico", "/*.jpg").permitAll()
                         // H2 browser console (dev only)
                         .requestMatchers("/h2-console/**").permitAll()
                         // Public payment webhooks (secured via Razorpay HMAC signature)
                         .requestMatchers("/api/payments/webhook").permitAll()
-                        // Public fare preview
-                        .requestMatchers("/api/concessions/preview").permitAll()
+                        // Public fare & refund previews
+                        .requestMatchers("/api/concessions/preview", "/api/refunds/preview/**").permitAll()
+                        // Public payment order creation & verification (supports both guest & authenticated checkouts)
+                        .requestMatchers("/api/payments/order", "/api/payments/verify").permitAll()
                         // Public development auth/token endpoints
                         .requestMatchers("/api/auth/**").permitAll()
                         // In dev mode allow booking creation or authenticate

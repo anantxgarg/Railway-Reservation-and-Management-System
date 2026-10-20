@@ -22,14 +22,12 @@ public class PaymentController {
     private final WebhookService webhookService;
 
     @PostMapping("/order")
-    @PreAuthorize("hasAnyRole('CUSTOMER', 'STAFF', 'ADMIN')")
     public OrderResponse createOrder(@Valid @RequestBody CreateOrderRequest req, Authentication auth) {
         Integer userId = extractUserId(auth);
         return paymentService.createOrder(req.bookingId(), userId);
     }
 
     @PostMapping("/verify")
-    @PreAuthorize("hasAnyRole('CUSTOMER', 'STAFF', 'ADMIN')")
     public PaymentResponse verify(@Valid @RequestBody VerifyPaymentRequest req, Authentication auth) {
         Integer userId = extractUserId(auth);
         return PaymentResponse.from(paymentService.verify(
