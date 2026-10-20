@@ -10,10 +10,23 @@ Full-stack Railway Reservation & Management System featuring ticket booking, PNR
 |---|---|---|---|---|
 | **Team 1** | Users & Auth | Authentication, JWT & refresh tokens, RBAC, password reset, audit logging, identity database | Node.js, Express, PostgreSQL, MongoDB, Brevo API | Backend & database implemented; frontend pending |
 | **Team 2** | Trains, Stations, Routes | Master train catalog, stations, routes, schedules, coaches, seat layouts | TBD | Not started |
-| **Team 3** | Booking, PNR, Seats | Booking management, PNR generation, seat allocation, waitlist | TBD | In progress |
+| **Team 3** | Booking, PNR, Seats | Booking management, PNR generation, seat allocation, waitlist | PostgreSQL; Spring Boot (planned) | Database in progress |
 | **Team 4** | Payments & Refunds | Razorpay payment gateway integration, concession calculations, refund policies | Spring Boot, Razorpay, React + MUI | Implemented |
 | **Team 5** | Reports & Analytics | Reports, analytics, admin dashboards | TBD | Not started |
 | **Team 6** | Notifications, Status, Feedback | Email / SMS notifications, live train status, feedback | TBD | Not started |
+
+---
+
+## Shared Database Setup
+
+All teams share one PostgreSQL database, `railway`. `database/setup.sh` builds it from each team's SQL in dependency order (C1 identity, then C3 booking):
+
+```bash
+PGHOST=localhost PGUSER=postgres ./database/setup.sh            # create and fill "railway"
+PGHOST=localhost PGUSER=postgres ./database/setup.sh --reset    # drop and rebuild it
+```
+
+Start Team 4's Spring Boot app afterwards; it creates its own tables on startup.
 
 ---
 
@@ -153,6 +166,18 @@ Configured in `database/c1-identity/seed_dev_users.sql` (all use password: `Rail
 | `admin@example.com` | `ADMIN` | `ACTIVE` | System administrator with full permissions |
 | `locked@example.com` | `CUSTOMER` | `LOCKED` | Account locked for lockout testing |
 | `suspended@example.com` | `CUSTOMER` | `SUSPENDED` | Suspended account testing |
+
+---
+
+## Team 3 — Booking, PNR & Seats
+
+Database for bookings, passengers and seat allocation, in [`database/c3-booking/`](database/c3-booking/README.md). It also holds placeholder copies of the network tables (Team 2) and `concession_rule` (Team 4) until those teams take them over.
+
+Run the database tests (builds and drops its own `railway_c3_test` database):
+
+```bash
+PGHOST=localhost PGUSER=postgres ./database/c3-booking/tests/run_tests.sh
+```
 
 ---
 
