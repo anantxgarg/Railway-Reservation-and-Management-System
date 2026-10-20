@@ -1,7 +1,7 @@
 package com.example.gateway.web;
 
 import com.example.gateway.domain.ConcessionApplication;
-import com.example.gateway.service.BookingService;
+import com.example.gateway.domain.PassengerCategory;
 import com.example.gateway.service.ConcessionService;
 import com.example.gateway.web.Dtos.*;
 import jakarta.validation.Valid;
@@ -11,6 +11,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @RestController
@@ -19,7 +20,14 @@ import java.util.List;
 public class ConcessionController {
 
     private final ConcessionService concessionService;
-    private final BookingService bookingService;
+
+    /** Lets the UI show the discounted fare before the passenger commits. */
+    @GetMapping("/preview")
+    public ConcessionResult preview(
+            @RequestParam(required = false, defaultValue = "GENERAL") PassengerCategory category,
+            @RequestParam(required = false, defaultValue = "1000.00") BigDecimal baseFare) {
+        return concessionService.calculate(category, baseFare);
+    }
 
     @PostMapping("/apply")
     @ResponseStatus(HttpStatus.CREATED)
@@ -27,15 +35,12 @@ public class ConcessionController {
     public ConcessionApplicationResponse apply(
             @Valid @RequestBody ApplyConcessionRequest req,
             Authentication auth) {
-        Integer userId = auth != null && auth.getName() != null ? Integer.valueOf(auth.getName()) : null;
-        var booking = bookingService.get(req.bookingId());
-
         ConcessionApplication app = concessionService.createApplication(
-                req.bookingId(),
-                userId,
-                booking.getPassengerName(),
+                req.pnr(),
+                req.passengerId(),
+                Integer.valueOf(auth.getName()),
+                hasRole(auth, "ROLE_ADMIN"),
                 req.category(),
-                booking.getBaseFare(),
                 req.idCardType(),
                 req.idCardNumber(),
                 req.documentReferenceUrl()
@@ -57,9 +62,8 @@ public class ConcessionController {
             @PathVariable Long id,
             @Valid @RequestBody ConcessionReviewRequest req,
             Authentication auth) {
-        Integer staffId = auth != null && auth.getName() != null ? Integer.valueOf(auth.getName()) : 1;
         return ConcessionApplicationResponse.from(
-                concessionService.review(id, req.status(), staffId, req.remarks()));
+                concessionService.review(id, req.status(), Integer.valueOf(auth.getName()), req.remarks()));
     }
 
     @GetMapping("/my")
@@ -71,8 +75,16 @@ public class ConcessionController {
                 .toList();
     }
 
-    @GetMapping("/booking/{bookingId}")
-    public ConcessionApplicationResponse getByBooking(@PathVariable Long bookingId) {
-        return ConcessionApplicationResponse.from(concessionService.getByBooking(bookingId));
+    @GetMapping("/booking/{pnr}")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'STAFF', 'ADMIN')")
+    public List<ConcessionApplicationResponse> getByBooking(@PathVariable String pnr, Authentication auth) {
+        boolean staff = hasRole(auth, "ROLE_STAFF") || hasRole(auth, "ROLE_ADMIN");
+        return concessionService.getByBooking(pnr, Integer.valueOf(auth.getName()), staff).stream()
+                .map(ConcessionApplicationResponse::from)
+                .toList();
+    }
+
+    private static boolean hasRole(Authentication auth, String role) {
+        return auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals(role));
     }
 }

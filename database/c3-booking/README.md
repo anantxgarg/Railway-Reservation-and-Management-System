@@ -15,7 +15,7 @@ PostgreSQL tables, seed data and tests for the booking module. Table and column 
 | `06_procedures.sql` | `create_booking`, `confirm_booking`, `cancel_passengers`, `promote_queue`, `expire_holds` | Team 3 |
 | `07_views.sql` | `v_pnr_status`, `v_user_bookings`, `v_run_availability`, `v_run_route` | Team 3 |
 | `seed_dev.sql` | Classes, quotas, concessions, 3 trains / routes, runs for the next 30 days, coaches, 1,202 seats | Team 3 (network data is placeholder) |
-| `tests/run_tests.sh`, `tests/test_db.sql` | Builds a throwaway database; 90 checks plus a 10-session race for the last berth | Team 3 |
+| `tests/run_tests.sh`, `tests/test_db.sql` | Builds a throwaway database; 92 checks plus a 10-session race for the last berth | Team 3 |
 
 Users are not seeded here. Booking uses C1's dev accounts (`customer@example.com`, password `Railway@Dev123`).
 
@@ -24,7 +24,7 @@ Users are not seeded here. Booking uses C1's dev accounts (`customer@example.com
 | Step | Call | Result |
 |---|---|---|
 | Book | `SELECT create_booking(user_id, run_id, class, quota, from_seq, to_seq, passengers_json)` | New PNR, `HELD` for 15 minutes. Each passenger gets a berth if one is free for the whole journey, else RAC, else waitlist. |
-| Pay | `SELECT confirm_booking(pnr)` | `HELD` → `CONFIRMED`; returns the amount. Safe to call twice. Fails once the hold has expired. |
+| Pay | `SELECT confirm_booking(pnr)` | `HELD` → `CONFIRMED`; returns the amount (`total_fare`, fixed from now on). Safe to call twice. Fails once the hold has expired. |
 | Cancel | `SELECT * FROM cancel_passengers(pnr, ARRAY[ids])` (or `NULL` for all) | Frees berths, cancels the booking when nobody is left, promotes the queue. Returns one row per cancelled passenger for the refund. |
 | Expire | `CALL expire_holds()` | Unpaid holds past expiry → `EXPIRED`, berths go to the queue. [`booking-service`](../../booking-service/README.md) runs it every minute. |
 | Status | `SELECT * FROM v_pnr_status WHERE pnr = ...` | One row per passenger, `status_label` like `CNF/B1/23/LB`, `RAC 3`, `WL 12`. |
@@ -60,4 +60,4 @@ Builds `railway_c3_test`, runs every check inside a rolled-back transaction, run
 
 - **Team 1:** `booking.user_id` references `users(user_id)`. Re-running C1's `schema.sql` drops `users` with `CASCADE`, which removes this foreign key; rebuild with `setup.sh --reset` instead.
 - **Team 2:** take over `01_network_placeholder.sql` and the network part of `seed_dev.sql` rather than writing new versions. The schema has no departure time for a train's first stop yet; search screens will need one.
-- **Team 4:** a booking is identified by `pnr VARCHAR(10)`. On payment success call `confirm_booking(pnr)` in the same transaction that marks the payment successful. For refunds call `cancel_passengers` and apply your refund policy to the rows it returns. `concession_rule` and `calc_fare` are placeholders for yours.
+- **Team 4:** a booking is identified by `pnr VARCHAR(10)`. `booking.total_fare` is the amount to charge while `HELD` (passengers not cancelled) and the amount paid once `CONFIRMED`. On payment success call `confirm_booking(pnr)` in the same transaction that marks the payment successful. Paid bookings are cancelled by your refund endpoint calling `cancel_passengers`, in the same transaction as the refund. Both are done in the payments app (`ReservationRepository`). `concession_rule` and `calc_fare` are placeholders for yours.

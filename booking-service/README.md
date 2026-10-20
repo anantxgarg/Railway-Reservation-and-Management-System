@@ -46,7 +46,7 @@ Dev accounts: `customer@example.com`, `staff@example.com`, `admin@example.com`, 
 | POST | `/api/bookings` | CUSTOMER | Book and hold for 15 minutes. Returns `201` with the booking. |
 | GET | `/api/bookings/mine` | any logged-in user | The caller's bookings, newest first. |
 | GET | `/api/bookings/{pnr}` | owner, STAFF, ADMIN | PNR status with every passenger. |
-| POST | `/api/bookings/{pnr}/cancel` | owner, STAFF, ADMIN | Cancel some passengers (`{"passengerIds": [12, 13]}`), or everyone (no body). |
+| POST | `/api/bookings/{pnr}/cancel` | owner, STAFF, ADMIN | Cancel some passengers of an **unpaid** booking (`{"passengerIds": [12, 13]}`), or everyone (no body). Paid bookings: `409 PAID_BOOKING`; cancel them through Team 4's `POST /api/refunds`. |
 
 Fares shown by search and availability are per passenger, for the general quota without concession.
 
@@ -101,7 +101,13 @@ The response (and `GET /api/bookings/{pnr}`) looks like this:
 
 ### Cancel
 
-The response lists the cancelled passengers and their fares, `bookingWasPaid`, and the updated booking. When `bookingWasPaid` is true a refund is due. Refunds are Team 4's; how the two connect is part of the next integration step.
+For a booking that hasn't been paid yet (`HELD`):
+- The response lists the cancelled passengers and their fares, plus the updated booking.
+- `totalFare` drops, because only the passengers still on the booking are charged.
+
+A paid booking (`CONFIRMED`) returns `409 PAID_BOOKING`. Cancel it through Team 4's `POST /api/refunds` instead, which cancels the passengers and issues the refund in one transaction.
+
+Paying works the same way: Team 4's `POST /api/payments/order {"pnr": ...}` and the Razorpay checkout. A successful payment confirms the booking.
 
 ## Errors
 
@@ -114,6 +120,7 @@ Every error uses Team 1's shape: `{"error": {"code": "...", "message": "...", "c
 | 403 | `FORBIDDEN` | Role not allowed, e.g. STAFF trying to book |
 | 404 | `NOT_FOUND` | Unknown run or PNR, or someone else's PNR |
 | 409 | `WRONG_STATE` | Train already left or run cancelled, booking already cancelled, hold expired |
+| 409 | `PAID_BOOKING` | Cancelling a paid booking here; use Team 4's refunds |
 | 409 | `CONFLICT` | Clashed with a concurrent request; retry |
 | 422 | `INVALID_INPUT` | Station not on the route, unknown quota or concession, bad passenger list |
 | 422 | `RULE_VIOLATION` | A database rule refused it, e.g. `chk_passenger_age` or `trg_booking_class_on_train` |
@@ -126,7 +133,7 @@ The database raises standard SQLSTATEs, and `ApiExceptionHandler` maps them to t
 PGHOST=localhost PGUSER=postgres ./booking-service/run_tests.sh
 ```
 
-Rebuilds `railway_test` with `setup.sh --reset`, then runs 42 tests:
+Rebuilds `railway_test` with `setup.sh --reset`, then runs 44 tests:
 - **Token rules** (unit tests).
 - **Access rules:** who can reach which endpoint.
 - **Search and availability.**

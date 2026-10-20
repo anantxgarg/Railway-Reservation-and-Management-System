@@ -1,9 +1,12 @@
 package com.example.gateway.service;
 
 import com.example.gateway.domain.*;
-import com.example.gateway.repo.BookingRepository;
 import com.example.gateway.repo.PaymentRepository;
 import com.example.gateway.repo.RefundRepository;
+import com.example.gateway.repo.ReservationRepository;
+import com.example.gateway.repo.ReservationRepository.CancelledPassenger;
+import com.example.gateway.repo.ReservationRepository.PassengerInfo;
+import com.example.gateway.repo.ReservationRepository.Reservation;
 import com.example.gateway.web.ApiException;
 import com.example.gateway.web.Dtos.RefundQuote;
 import com.razorpay.RazorpayClient;
@@ -17,20 +20,36 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Duration;
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.List;
 
 /**
- * Refund = cancellation. Calculated on the amount actually PAID (after concession),
- * strictly adhering to departure time windows.
+ * Refund = cancellation of passengers on a paid booking. Calculated on what was
+ * paid for the cancelled passengers, by how long before departure they cancel.
+ *
+ * The passengers are cancelled with Team 3's cancel_passengers() in the same
+ * transaction that records the refund: if Razorpay refuses the refund, the
+ * cancellation is rolled back too, so seats are never released without a refund.
+ * Unpaid bookings are cancelled through the booking service instead.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class RefundService {
 
+    /**
+     * The schema has no departure time yet (Team 2), only the date the train
+     * leaves the passenger's boarding station. Until it does, departure is taken
+     * as the start of that day in India: refunds are worked out as if the train
+     * left at midnight, which never gives more than the policy allows.
+     */
+    static final ZoneId RAILWAY_ZONE = ZoneId.of("Asia/Kolkata");
+
     private final RazorpayClient client;
-    private final BookingRepository bookings;
+    private final ReservationRepository reservations;
     private final PaymentRepository payments;
     private final RefundRepository refunds;
 
@@ -47,71 +66,85 @@ public class RefundService {
     @Value("${refund.late-window-percent}")
     private BigDecimal lateWindowPercent;
 
-    /** Shows the passenger what they'd get back without actually refunding. */
-    public RefundQuote quote(Long bookingId) {
-        Booking booking = getBooking(bookingId);
-        Payment payment = getPaidPayment(bookingId);
-        return buildQuote(booking, payment);
+    /** The refund percentage and its explanation for a given time before departure. */
+    record Policy(BigDecimal percent, String note) {
     }
 
+    /** Shows what cancelling these passengers (null = everyone left) would refund, without doing it. */
+    public RefundQuote quote(String pnr, List<Integer> passengerIds, Integer userId, boolean isStaffOrAdmin) {
+        Reservation booking = ownedBooking(pnr, userId, isStaffOrAdmin);
+        requireConfirmed(booking);
+        getPaidPayment(pnr);
+
+        List<PassengerInfo> chosen = reservations.activePassengers(pnr).stream()
+                .filter(p -> passengerIds == null || passengerIds.contains(p.passengerId()))
+                .toList();
+        if (passengerIds != null && chosen.size() != passengerIds.size()) {
+            throw ApiException.badRequest("Some passengers are not active passengers of PNR " + pnr);
+        }
+        BigDecimal paid = chosen.stream().map(PassengerInfo::fare).reduce(BigDecimal.ZERO, BigDecimal::add);
+        return buildQuote(pnr, paid, policyFor(booking.journeyDate(), Instant.now()));
+    }
+
+    /**
+     * Cancels the passengers (null = everyone left) and refunds them by the policy.
+     * Cancelling inside the last window is allowed and refunds nothing.
+     */
     @Transactional
-    public Refund requestRefund(Long bookingId, String reason, Integer userId, Integer staffId) {
-        Booking booking = getBooking(bookingId);
-        if (booking.getStatus() != BookingStatus.CONFIRMED) {
-            throw ApiException.conflict("Only confirmed bookings can be refunded (status " + booking.getStatus() + ")");
+    public Refund requestRefund(String pnr, List<Integer> passengerIds, String reason,
+                                Integer userId, boolean isStaffOrAdmin) {
+        ownedBooking(pnr, userId, isStaffOrAdmin);
+        Reservation booking = reservations.lock(pnr).orElseThrow();
+        requireConfirmed(booking);
+        Payment payment = getPaidPayment(pnr);
+
+        // cancel first: it validates the passenger ids and returns what each one paid
+        List<CancelledPassenger> cancelled = reservations.cancel(pnr, passengerIds);
+        BigDecimal paid = cancelled.stream().map(CancelledPassenger::fare).reduce(BigDecimal.ZERO, BigDecimal::add);
+        RefundQuote quote = buildQuote(pnr, paid, policyFor(booking.journeyDate(), Instant.now()));
+
+        Refund r = new Refund();
+        r.setPnr(pnr);
+        r.setPaymentId(payment.getId());
+        r.setUserId(payment.getUserId());
+        r.setProcessedByStaffId(isStaffOrAdmin ? userId : null);
+        r.setAmount(quote.refundAmount());
+        r.setRefundPercent(quote.refundPercent());
+        r.setReason(reason != null ? reason : "Passenger cancellation (" + cancelled.size() + " passenger(s))");
+        if (quote.refundAmount().signum() > 0) {
+            issue(r, payment, reason == null ? "Passenger cancellation" : reason, userId, isStaffOrAdmin);
+        } else {
+            r.setStatus(RefundStatus.PROCESSED);   // nothing to send back: quote.note() says why
         }
-        Payment payment = getPaidPayment(bookingId);
+        refunds.save(r);
 
-        // Security check: Customer can only cancel their own booking (Staff/Admin can override)
-        if (staffId == null && userId != null && payment.getUserId() != null && !payment.getUserId().equals(userId)) {
-            throw ApiException.conflict("Access denied: You can only request refunds for your own bookings");
-        }
-
-        RefundQuote quote = buildQuote(booking, payment);
-        if (quote.refundAmount().signum() <= 0) {
-            throw ApiException.badRequest(quote.note());
-        }
-
-        try {
-            JSONObject req = new JSONObject();
-            req.put("amount", Money.toPaise(quote.refundAmount()));
-            req.put("speed", "normal");
-            req.put("notes", new JSONObject()
-                    .put("bookingId", String.valueOf(bookingId))
-                    .put("userId", userId != null ? String.valueOf(userId) : "anonymous")
-                    .put("processedByStaff", staffId != null ? String.valueOf(staffId) : "self-service")
-                    .put("reason", reason == null ? "Passenger cancellation" : reason));
-
-            com.razorpay.Refund rzpRefund = client.payments.refund(payment.getRazorpayPaymentId(), req);
-            String rzpId = rzpRefund.get("id");
-            String rzpStatus = rzpRefund.get("status");
-
-            Refund r = new Refund();
-            r.setBookingId(bookingId);
-            r.setPaymentId(payment.getId());
-            r.setUserId(userId != null ? userId : payment.getUserId());
-            r.setProcessedByStaffId(staffId);
-            r.setRazorpayRefundId(rzpId);
-            r.setAmount(quote.refundAmount());
-            r.setRefundPercent(quote.refundPercent());
-            r.setReason(reason);
-            r.setStatus("processed".equalsIgnoreCase(rzpStatus) ? RefundStatus.PROCESSED : RefundStatus.PENDING);
-            refunds.save(r);
-
-            booking.setStatus(BookingStatus.CANCELLED);
-            bookings.save(booking);
-            payment.setStatus(PaymentStatus.REFUNDED);
-            payment.setUpdatedAt(LocalDateTime.now());
-            payments.save(payment);
-            return r;
-        } catch (RazorpayException e) {
-            log.error("Razorpay refund failed", e);
-            throw ApiException.gateway("Could not create refund: " + e.getMessage());
-        }
+        boolean everyoneCancelled = reservations.activePassengers(pnr).isEmpty();
+        payment.setStatus(everyoneCancelled ? PaymentStatus.REFUNDED : PaymentStatus.PARTIALLY_REFUNDED);
+        payment.setUpdatedAt(OffsetDateTime.now());
+        payments.save(payment);
+        return r;
     }
 
-    public Refund requestRefund(Long bookingId, String reason) {
-        return requestRefund(bookingId, reason, null, null);
+    /**
+     * A payment arrived that could not confirm its booking (the hold had expired,
+     * the amount had changed, or the booking was already paid): give it all back.
+     */
+    @Transactional
+    public Refund refundUnconfirmedPayment(Payment payment, String why) {
+        Refund r = new Refund();
+        r.setPnr(payment.getPnr());
+        r.setPaymentId(payment.getId());
+        r.setUserId(payment.getUserId());
+        r.setAmount(payment.getAmount());
+        r.setRefundPercent(BigDecimal.valueOf(100));
+        r.setReason("Automatic: booking not confirmed (" + why + ")");
+        issue(r, payment, r.getReason(), payment.getUserId(), false);
+        refunds.save(r);
+
+        payment.setStatus(PaymentStatus.REFUNDED);
+        payment.setUpdatedAt(OffsetDateTime.now());
+        payments.save(payment);
+        return r;
     }
 
     /** Called from the webhook when Razorpay reports the final refund state. */
@@ -123,20 +156,9 @@ public class RefundService {
         }, () -> log.warn("Webhook for unknown refund {}", razorpayRefundId));
     }
 
-    public List<Refund> forBooking(Long bookingId) {
-        return refunds.findByBookingIdOrderByIdDesc(bookingId);
-    }
-
-    public List<Refund> forBooking(Long bookingId, Integer requestingUserId, boolean isStaffOrAdmin) {
-        List<Refund> list = refunds.findByBookingIdOrderByIdDesc(bookingId);
-        if (!isStaffOrAdmin && requestingUserId != null) {
-            boolean hasUnauthorized = list.stream()
-                    .anyMatch(r -> r.getUserId() != null && !r.getUserId().equals(requestingUserId));
-            if (hasUnauthorized) {
-                throw ApiException.conflict("Access denied: You do not own this refund record");
-            }
-        }
-        return list;
+    public List<Refund> forBooking(String pnr, Integer requestingUserId, boolean isStaffOrAdmin) {
+        ownedBooking(pnr, requestingUserId, isStaffOrAdmin);
+        return refunds.findByPnrOrderByIdDesc(pnr);
     }
 
     public List<Refund> forUser(Integer userId) {
@@ -145,36 +167,65 @@ public class RefundService {
 
     // ---------- helpers ----------
 
-    private RefundQuote buildQuote(Booking booking, Payment payment) {
-        BigDecimal paid = payment.getAmount();
-        double hoursLeft = Duration.between(LocalDateTime.now(), booking.getDepartureTime()).toMinutes() / 60.0;
+    /** The refund policy for a train leaving on departureDate, asked at time now. */
+    Policy policyFor(LocalDate departureDate, Instant now) {
+        Instant departure = departureDate.atStartOfDay(RAILWAY_ZONE).toInstant();
+        double hoursLeft = Duration.between(now, departure).toMinutes() / 60.0;
 
-        BigDecimal percent;
-        String note;
         if (hoursLeft >= fullWindowHours) {
-            percent = fullWindowPercent;
-            note = "Cancelled " + fullWindowHours + "h or more before departure";
+            return new Policy(fullWindowPercent, "Cancelled " + fullWindowHours + "h or more before departure");
         } else if (hoursLeft >= midWindowHours) {
-            percent = midWindowPercent;
-            note = "Cancelled " + midWindowHours + "-" + fullWindowHours + "h before departure";
+            return new Policy(midWindowPercent, "Cancelled " + midWindowHours + "-" + fullWindowHours + "h before departure");
         } else if (hoursLeft >= lateWindowHours) {
-            percent = lateWindowPercent;
-            note = "Cancelled " + lateWindowHours + "-" + midWindowHours + "h before departure";
-        } else {
-            percent = BigDecimal.ZERO;
-            note = "Not refundable: less than " + lateWindowHours + "h to departure";
+            return new Policy(lateWindowPercent, "Cancelled " + lateWindowHours + "-" + midWindowHours + "h before departure");
         }
-
-        BigDecimal refund = Money.percentOf(paid, percent);
-        return new RefundQuote(booking.getId(), paid, percent, refund, paid.subtract(refund), note);
+        return new Policy(BigDecimal.ZERO, "Not refundable: less than " + lateWindowHours + "h to departure");
     }
 
-    private Booking getBooking(Long id) {
-        return bookings.findById(id).orElseThrow(() -> ApiException.notFound("Booking not found: " + id));
+    private static RefundQuote buildQuote(String pnr, BigDecimal paid, Policy policy) {
+        BigDecimal refund = Money.percentOf(paid, policy.percent());
+        return new RefundQuote(pnr, paid, policy.percent(), refund, paid.subtract(refund), policy.note());
     }
 
-    private Payment getPaidPayment(Long bookingId) {
-        return payments.findFirstByBookingIdAndStatus(bookingId, PaymentStatus.PAID)
-                .orElseThrow(() -> ApiException.conflict("No successful payment found for booking " + bookingId));
+    /** Sends the refund to Razorpay and records its id and status on r. */
+    private void issue(Refund r, Payment payment, String reason, Integer userId, boolean byStaff) {
+        try {
+            JSONObject req = new JSONObject();
+            req.put("amount", Money.toPaise(r.getAmount()));
+            req.put("speed", "normal");
+            req.put("notes", new JSONObject()
+                    .put("pnr", r.getPnr())
+                    .put("userId", String.valueOf(userId))
+                    .put("processedByStaff", byStaff ? String.valueOf(userId) : "self-service")
+                    .put("reason", reason));
+
+            com.razorpay.Refund rzpRefund = client.payments.refund(payment.getRazorpayPaymentId(), req);
+            r.setRazorpayRefundId(rzpRefund.get("id"));
+            String rzpStatus = rzpRefund.get("status");
+            r.setStatus("processed".equalsIgnoreCase(rzpStatus) ? RefundStatus.PROCESSED : RefundStatus.PENDING);
+        } catch (RazorpayException e) {
+            log.error("Razorpay refund failed", e);
+            throw ApiException.gateway("Could not create refund: " + e.getMessage());
+        }
+    }
+
+    /** The booking, if the caller owns it or is staff; otherwise 404, so PNRs can't be probed. */
+    private Reservation ownedBooking(String pnr, Integer userId, boolean isStaffOrAdmin) {
+        return reservations.find(pnr)
+                .filter(b -> isStaffOrAdmin || (userId != null && b.userId() == userId))
+                .orElseThrow(() -> ApiException.notFound("Booking not found: " + pnr));
+    }
+
+    private static void requireConfirmed(Reservation booking) {
+        if (!"CONFIRMED".equals(booking.status())) {
+            throw ApiException.conflict("Only paid (CONFIRMED) bookings are refunded here (status "
+                    + booking.status() + "); unpaid bookings are cancelled through the booking service");
+        }
+    }
+
+    private Payment getPaidPayment(String pnr) {
+        return payments.findFirstByPnrAndStatusInOrderByIdDesc(pnr,
+                        List.of(PaymentStatus.PAID, PaymentStatus.PARTIALLY_REFUNDED))
+                .orElseThrow(() -> ApiException.conflict("No successful payment found for booking " + pnr));
     }
 }

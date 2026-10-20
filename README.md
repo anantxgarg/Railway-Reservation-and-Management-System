@@ -28,6 +28,16 @@ PGHOST=localhost PGUSER=postgres ./database/setup.sh --reset    # drop and rebui
 
 Start Team 4's Spring Boot app afterwards; it creates its own tables on startup.
 
+### Running the services together
+
+| Service | Folder | Port | Start |
+|---|---|---|---|
+| Users & Auth (Team 1) | `backend/` | 3000 | `npm start` (needs `.env`, see Team 1) |
+| Booking (Team 3) | `booking-service/` | 8082 | `./mvnw spring-boot:run` |
+| Payments (Team 4) | repo root | 8081 | `mvn spring-boot:run` (needs Razorpay test keys) |
+
+All three use the same `PG*` variables for the database. They must also share **one `JWT_SECRET`**: Team 1 signs logins with it, and the other two verify the tokens with it.
+
 ---
 
 ## Team 1 — Users & Auth
@@ -191,72 +201,80 @@ PGHOST=localhost PGUSER=postgres ./booking-service/run_tests.sh             # AP
 
 ## Team 4 — Payments & Refunds (Razorpay Payment Gateway)
 
-Spring Boot 3 / Java 17 prototype covering **payments, refunds and passenger concessions** for a ticket booking system. The booking module here is only a stand-in; swap it for the group's real one later.
+Spring Boot 3 / Java 17 app covering **payments, refunds and passenger concessions** for bookings made through Team 3's booking service. A booking is identified by its **PNR**.
 
 ### Run
 
-1. Get **test mode** keys: Razorpay Dashboard → Account & Settings → API Keys.
-2. Set env vars (or edit `application.properties`):
+1. Build the shared database first; this app's migrations need the booking tables: `PGHOST=localhost PGUSER=postgres ./database/setup.sh`
+2. Get **test mode** keys: Razorpay Dashboard → Account & Settings → API Keys.
+3. Set the environment and start the app. Nothing secret is stored in `application.properties`, so the app won't start without these:
    ```bash
+   export PGHOST=localhost PGUSER=postgres PGPASSWORD=...     # same as setup.sh
+   export JWT_SECRET=...                                      # Team 1's secret
    export RAZORPAY_KEY_ID=rzp_test_xxxxxxxx
    export RAZORPAY_KEY_SECRET=xxxxxxxx
    export RAZORPAY_WEBHOOK_SECRET=any_string_you_choose
    mvn spring-boot:run
    ```
-3. Open http://localhost:8080 for the web UI (use the port you set in `server.port`; 8081 if 8080 is taken).
+   The API is on port 8081. Set `PAYMENTS_PORT` to change it.
 
-### Frontend
+Flyway creates this app's tables (`V1`, `V2`). It baselines at version 0, so it also works on the shared database where other teams' tables already exist. Hibernate only validates the schema (`ddl-auto=validate`).
 
-Plain HTML, CSS and JavaScript in `src/main/resources/static/`, served by Spring Boot on the same port as the API, so there is no build step and no CORS setup.
+Logins are Team 1's. Every endpoint except the webhook and the concession preview needs `Authorization: Bearer <token>` from Team 1's `POST /api/auth/login`. The app's old development login (`/api/auth/login` on this port) has been removed.
 
-| File | Purpose |
-|---|---|
-| `index.html` | Two views: **Book a ticket** and **Manage booking** (hash routes `#/book`, `#/manage/{id}`) |
-| `css/style.css` | All styling, with light and dark themes |
-| `js/app.js` | Form validation, live fare, Razorpay Checkout, payment verification, refund flow |
-
-Changes are picked up by refreshing the browser. If you use IntelliJ, rebuild or restart so `static/` is copied to `target/classes`.
-
-Before going live: delete the "Testing with Razorpay test mode?" block in `index.html`.
-
-Default DB is in-memory H2 (zero setup). MySQL config is commented in `application.properties`.
+**The frontend is not updated yet.** The React app (`frontend/`) and `src/main/resources/static/` still call the removed booking and login endpoints. Team 3's booking screens and the PNR-based payment step replace them next.
 
 ### Flow
 
 ```
-POST /api/bookings            -> concession applied, status PENDING_PAYMENT
-POST /api/payments/order      -> Razorpay order for finalAmount
+(Team 3) POST /api/bookings          -> PNR, HELD for 15 minutes
+POST /api/payments/order {pnr}       -> Razorpay order for the booking's amount (booking.total_fare)
    (browser: Razorpay Checkout)
-POST /api/payments/verify     -> signature check, status CONFIRMED
-POST /api/payments/webhook    -> same result via Razorpay callback (safety net)
-GET  /api/refunds/preview/{bookingId}
-POST /api/refunds             -> cancels booking, refunds per policy
+POST /api/payments/verify            -> signature check; confirm_booking(pnr) in the same transaction
+POST /api/payments/webhook           -> same result via Razorpay callback (safety net)
+GET  /api/refunds/preview/{pnr}?passengerIds=...
+POST /api/refunds {pnr, passengerIds} -> cancel_passengers + Razorpay refund, in one transaction
 ```
+
+- **Payments that can't confirm their booking are refunded in full automatically:**
+  - the 15-minute hold expired before the payment arrived;
+  - passengers were dropped after the order was created, so the amount changed;
+  - a second payment arrived for a booking that's already paid.
+- **Cancellation and refund go together.** If Razorpay refuses the refund, the cancellation is rolled back and the passengers keep their seats.
+- **Unpaid bookings** are cancelled through Team 3's booking service.
 
 ### Endpoints
 
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/api/concessions/preview?category=STUDENT&baseFare=500` | Fare after concession |
-| POST | `/api/bookings` | Create booking |
-| GET | `/api/bookings/{id}` | Booking details/status |
-| POST | `/api/payments/order` | `{ "bookingId": 1 }` |
-| POST | `/api/payments/verify` | `{ razorpayOrderId, razorpayPaymentId, razorpaySignature }` |
-| POST | `/api/payments/webhook` | Razorpay callback |
-| GET | `/api/payments/booking/{id}` | Payments for a booking |
-| GET | `/api/refunds/preview/{bookingId}` | What a cancellation would refund |
-| POST | `/api/refunds` | `{ "bookingId": 1, "reason": "..." }` |
-| GET | `/api/refunds/booking/{id}` | Refunds for a booking |
+All of these need a Team 1 login unless marked public. Customers only see their own bookings; for anyone else's PNR they get 404.
 
-Example booking:
-```json
-{
-  "passengerName": "Asha", "email": "asha@example.com", "phone": "9999999999",
-  "origin": "Pune", "destination": "Mumbai",
-  "departureTime": "2026-10-20T18:30:00",
-  "category": "STUDENT", "baseFare": 500
-}
+| Method | Path | Who | Purpose |
+|---|---|---|---|
+| GET | `/api/concessions/preview?category=STUDENT&baseFare=500` | public | Fare after concession |
+| POST | `/api/payments/order` | CUSTOMER (owner) | `{ "pnr": "1000000016" }` |
+| POST | `/api/payments/verify` | CUSTOMER (owner) | `{ razorpayOrderId, razorpayPaymentId, razorpaySignature }` |
+| POST | `/api/payments/webhook` | Razorpay (HMAC signature) | Razorpay callback |
+| GET | `/api/payments/booking/{pnr}` | owner, STAFF, ADMIN | Payments for a booking |
+| GET | `/api/payments/my` | CUSTOMER | My payments |
+| GET | `/api/refunds/preview/{pnr}?passengerIds=12,13` | owner, STAFF, ADMIN | What cancelling would refund (no ids = everyone left) |
+| POST | `/api/refunds` | owner, STAFF, ADMIN | `{ "pnr": "...", "passengerIds": [12], "reason": "..." }` (no ids = everyone left) |
+| GET | `/api/refunds/booking/{pnr}` | owner, STAFF, ADMIN | Refunds for a booking |
+| GET | `/api/refunds/my` | CUSTOMER | My refunds |
+| POST | `/api/concessions/apply` | CUSTOMER, ADMIN | `{ "pnr", "passengerId", "category", "idCardType", "idCardNumber" }` |
+| GET | `/api/concessions/pending`, POST `/api/concessions/{id}/review` | STAFF, ADMIN | Verify concession documents |
+| GET | `/api/concessions/booking/{pnr}` | owner, STAFF, ADMIN | Applications for a booking |
+
+### Tests
+
+```bash
+PGHOST=localhost PGUSER=postgres PGDATABASE=railway_test ./database/setup.sh --reset
+PGHOST=localhost PGUSER=postgres mvn test
 ```
+
+The unit tests need no database. The integration tests (`web/*Test`) run against `railway_test`, with Razorpay replaced by a mock, so no real payments are made. They cover:
+- order, verify and webhook;
+- late, outdated and duplicate payments;
+- partial and full refunds, and a refused refund rolling the cancellation back;
+- concessions and logins.
 
 ### Concession rules (`application.properties`)
 
@@ -271,11 +289,13 @@ Refund is a percentage of the **amount actually paid** (after concession):
 | 48h or more | 90% |
 | 24h to 48h | 75% |
 | 4h to 24h | 50% |
-| under 4h | not refundable |
+| under 4h | no refund (cancelling is still allowed and frees the seats) |
+
+The refund is worked out on what was paid for the passengers being cancelled. The schema has no departure time yet (Team 2), so departure is taken as the start of the travel day in India (00:00 IST). That never gives more refund than the policy allows.
 
 ### Webhook setup (optional for local testing)
 
-1. Expose your app: `ngrok http 8080`.
+1. Expose your app: `ngrok http 8081`.
 2. Dashboard → Webhooks → Add: URL `https://<ngrok>/api/payments/webhook`, secret = `RAZORPAY_WEBHOOK_SECRET`.
 3. Enable events: `payment.captured`, `payment.failed`, `refund.processed`, `refund.failed`.
 
@@ -285,13 +305,17 @@ Refund is a percentage of the **amount actually paid** (after concession):
 - UPI: `success@razorpay` (success) or `failure@razorpay` (failure).
 - Make sure payments are set to **auto-capture** in Dashboard → Settings → Configuration → Payment Capture, otherwise they stay "authorized" and refunds will fail.
 
-### Things to revisit once the full system is defined
+### Things to revisit
 
-- Replace `Booking` with the real booking/seat module (keep `bookingId` as the link).
-- Move concession and refund rules to a DB table or admin config.
-- Add authentication; today anyone can call the refund endpoint.
-- Partial cancellations (multi-passenger tickets), GST/convenience fee handling.
-- Reconciliation job for orders stuck in `CREATED`.
+- **Concessions have two sources of truth:**
+  - Team 3's `concession_rule` table, applied per passenger at booking, which changes the fare paid;
+  - this app's `concession.*` percentages and staff-verified applications, which don't change the fare yet.
+
+  Agree on one, then remove the other.
+- **Departure time for the refund windows** (see Refund policy).
+- **Waitlisted passengers when the chart is prepared.** If they still have no berth, they should be refunded in full automatically.
+- **A reconciliation job** for orders stuck in `CREATED`.
+- **Error format.** This app answers `{"error": "message"}`, while Team 1 and Team 3 answer `{"error": {"code", "message"}}`.
 
 ---
 

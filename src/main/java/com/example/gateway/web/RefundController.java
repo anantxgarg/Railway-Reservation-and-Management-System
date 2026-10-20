@@ -19,27 +19,32 @@ public class RefundController {
 
     private final RefundService refundService;
 
-    /** Shows the passenger or staff how much would be refunded without committing. */
-    @GetMapping("/preview/{bookingId}")
-    public RefundQuote preview(@PathVariable Long bookingId) {
-        return refundService.quote(bookingId);
+    /**
+     * Shows the passenger or staff how much would be refunded without committing.
+     * GET /api/refunds/preview/{pnr}?passengerIds=12,13 (no ids = everyone left on the booking)
+     */
+    @GetMapping("/preview/{pnr}")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'STAFF', 'ADMIN')")
+    public RefundQuote preview(@PathVariable String pnr,
+                               @RequestParam(required = false) List<Integer> passengerIds,
+                               Authentication auth) {
+        return refundService.quote(pnr, passengerIds, extractUserId(auth), isStaffOrAdmin(auth));
     }
 
-    /** Cancels the booking and initiates the Razorpay refund. */
+    /** Cancels the passengers of a paid booking and initiates the Razorpay refund, in one transaction. */
     @PostMapping
     @PreAuthorize("hasAnyRole('CUSTOMER', 'STAFF', 'ADMIN')")
     public RefundResponse refund(@Valid @RequestBody RefundRequest req, Authentication auth) {
-        Integer userId = extractUserId(auth);
-        Integer staffId = isStaffOrAdmin(auth) ? userId : null;
-        return RefundResponse.from(refundService.requestRefund(req.bookingId(), req.reason(), userId, staffId));
+        return RefundResponse.from(refundService.requestRefund(
+                req.pnr(), req.passengerIds(), req.reason(), extractUserId(auth), isStaffOrAdmin(auth)));
     }
 
-    @GetMapping("/booking/{bookingId}")
+    @GetMapping("/booking/{pnr}")
     @PreAuthorize("hasAnyRole('CUSTOMER', 'STAFF', 'ADMIN')")
-    public List<RefundResponse> forBooking(@PathVariable Long bookingId, Authentication auth) {
+    public List<RefundResponse> forBooking(@PathVariable String pnr, Authentication auth) {
         Integer userId = extractUserId(auth);
         boolean isStaffOrAdmin = isStaffOrAdmin(auth);
-        return refundService.forBooking(bookingId, userId, isStaffOrAdmin).stream()
+        return refundService.forBooking(pnr, userId, isStaffOrAdmin).stream()
                 .map(RefundResponse::from)
                 .toList();
     }
