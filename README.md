@@ -8,7 +8,7 @@ Full-stack Railway Reservation & Management System featuring ticket booking, PNR
 
 | Team | Module | Responsibility | Tech Stack | Status |
 |---|---|---|---|---|
-| **Team 1** | Users & Auth | Authentication, JWT & refresh tokens, RBAC, password reset, audit logging, identity database | Node.js, Express, PostgreSQL, MongoDB, Brevo API | Backend & database implemented; frontend pending |
+| **Team 1** | Users & Auth | Authentication, JWT & refresh tokens, RBAC, password reset, audit logging, identity database | Node.js, Express, PostgreSQL, MongoDB, Brevo API | Backend & database implemented; frontend pending (Team 3 added a minimal login page to replace) |
 | **Team 2** | Trains, Stations, Routes | Master train catalog, stations, routes, schedules, coaches, seat layouts | TBD | Not started |
 | **Team 3** | Booking, PNR, Seats | Booking management, PNR generation, seat allocation, waitlist | PostgreSQL, Spring Boot, React + MUI | Database, API and booking screens implemented & tested |
 | **Team 4** | Payments & Refunds | Razorpay payment gateway integration, concession calculations, refund policies | Spring Boot, Razorpay, React + MUI | Implemented |
@@ -17,27 +17,89 @@ Full-stack Railway Reservation & Management System featuring ticket booking, PNR
 
 ---
 
-## Shared Database Setup
+## Running everything
 
-All teams share one PostgreSQL database, `railway`. `database/setup.sh` builds it from each team's SQL in dependency order (C1 identity, then C3 booking):
+Three backends, one shared PostgreSQL database and one React app. In development the app's dev server forwards each `/api` path to the backend that owns it, so the browser only talks to http://localhost:5173.
+
+| Service | Folder | Port | Owns |
+|---|---|---|---|
+| Users & Auth (Team 1) | `backend/` | 3000 (`PORT`) | `/api/auth`, `/api/users`, `/api/admin` |
+| Booking (Team 3) | `booking-service/` | 8082 (`BOOKING_PORT`) | `/api/search`, `/api/runs`, `/api/bookings` |
+| Payments (Team 4) | repo root | 8081 (`PAYMENTS_PORT`) | `/api/payments`, `/api/refunds`, `/api/concessions` |
+| Frontend (all teams) | `frontend/` | 5173 | the screens |
+
+### Prerequisites
+
+- **PostgreSQL 14+**, with `psql` on the `PATH` (`setup.sh` uses it).
+- **Node.js 18+**, for Team 1's backend and the frontend.
+- **Java 17.** Maven is not needed: both Spring Boot apps have a `./mvnw` wrapper (`mvnw.cmd` on Windows).
+- **MongoDB 6+** is optional. Team 1 writes its audit log there; without it, logins still work and audit logging is skipped.
+- **Razorpay test-mode keys**, to take payments (Team 4, see below).
+
+### 1. Build the shared database
+
+All teams share one database, `railway`. `database/setup.sh` builds it from each team's SQL in dependency order: C1 identity, then C3 booking, with development data (users, a sample network of trains and runs for the next 30 days).
 
 ```bash
-PGHOST=localhost PGUSER=postgres ./database/setup.sh            # create and fill "railway"
-PGHOST=localhost PGUSER=postgres ./database/setup.sh --reset    # drop and rebuild it
+PGHOST=localhost PGUSER=postgres PGPASSWORD=... ./database/setup.sh            # create and fill "railway"
+PGHOST=localhost PGUSER=postgres PGPASSWORD=... ./database/setup.sh --reset    # drop and rebuild it
 ```
 
-Start Team 4's Spring Boot app afterwards; it creates its own tables on startup.
+Team 4's tables are created by the payments app itself (Flyway) the first time it starts, so it must start **after** this step.
 
-### Running the services together
+### 2. Environment variables
 
-| Service | Folder | Port | Start |
-|---|---|---|---|
-| Users & Auth (Team 1) | `backend/` | 3000 | `npm start` (needs `.env`, see Team 1) |
-| Booking (Team 3) | `booking-service/` | 8082 | `./mvnw spring-boot:run` |
-| Payments (Team 4) | repo root | 8081 | `mvn spring-boot:run` (needs Razorpay test keys) |
-| Frontend (all teams) | `frontend/` | 5173 | `npm ci && npm run dev`, then open http://localhost:5173 |
+| Variable | Used by | Value |
+|---|---|---|
+| `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD` | `setup.sh` and all three backends | The same everywhere. Defaults: `localhost`, `5432`, `railway`, `postgres` |
+| `JWT_SECRET` | all three backends | **One shared secret**, at least 32 characters. Team 1 signs logins with it; booking and payments check the tokens with it |
+| `MONGO_URI` | Team 1 | e.g. `mongodb://localhost:27017/railway` |
+| `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | payments | Razorpay test-mode keys; the webhook secret is any string you also enter in the Razorpay dashboard |
+| `PORT`, `BOOKING_PORT`, `PAYMENTS_PORT` | Team 1, booking, payments | Only to change the ports above |
+| `AUTH_URL`, `BOOKING_URL`, `PAYMENTS_URL` | frontend dev server | Only when a backend isn't on its default port, e.g. `PAYMENTS_URL=http://localhost:8091` |
 
-All three use the same `PG*` variables for the database. They must also share **one `JWT_SECRET`**: Team 1 signs logins with it, and the other two verify the tokens with it.
+Team 1 reads `backend/.env` (copy `backend/.env.example`; see Team 1 below). The Spring Boot apps and the frontend read the environment.
+
+Generate a secret once and use it for all three: `node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"`
+
+### 3. Start the services
+
+Each in its own terminal, after step 1. The backends don't depend on each other at startup, but the payments app needs the booking tables.
+
+```bash
+# shared by the terminals below
+export PGHOST=localhost PGUSER=postgres PGPASSWORD=...
+export JWT_SECRET=<the shared secret>
+
+cd backend && npm ci && npm start                      # Team 1, :3000 (reads backend/.env)
+cd booking-service && ./mvnw spring-boot:run           # Team 3, :8082
+RAZORPAY_KEY_ID=rzp_test_... RAZORPAY_KEY_SECRET=... RAZORPAY_WEBHOOK_SECRET=... \
+  ./mvnw spring-boot:run                               # Team 4, :8081, from the repo root
+cd frontend && npm ci && npm run dev                   # :5173
+```
+
+On Windows use `mvnw.cmd`, and `set NAME=value` instead of `export`.
+
+Open http://localhost:5173 and log in as `customer@example.com` with password `Railway@Dev123` (`staff@` and `admin@example.com` too). Book a ticket from `NDLS` to `MAS`, `BCT` or `NGP` on any of the next 30 days, then pay with Razorpay's test card `4111 1111 1111 1111`.
+
+### Tests
+
+| Suite | Command | Database |
+|---|---|---|
+| Team 1 unit | `cd backend && npm test` | none |
+| Team 1 database | `cd backend && npm run test:db` | `railway_test` |
+| C3 database | `./database/c3-booking/tests/run_tests.sh` | creates and drops `railway_c3_test` |
+| Booking API | `./booking-service/run_tests.sh` | rebuilds `railway_test` |
+| Payments | `PGDATABASE=railway_test ./database/setup.sh --reset && ./mvnw test` | `railway_test` |
+
+All need the `PG*` variables. None of them touch `railway`. Razorpay is mocked in the payments tests, so they need no keys. Several suites rebuild `railway_test`, so run them one at a time.
+
+### Troubleshooting
+
+- **Every call to booking or payments returns 401 after logging in.** The backends don't share the same `JWT_SECRET`.
+- **The payments app stops at startup with a Flyway error about `booking`.** The shared database hasn't been built yet; run step 1 first.
+- **Port 8081 (or another) is already in use.** Start the app on another port (`PAYMENTS_PORT=8091`) and tell the frontend (`PAYMENTS_URL=http://localhost:8091 npm run dev`).
+- **The `booking` foreign key to `users` disappeared.** Team 1's `schema.sql` drops `users` with `CASCADE`. Rebuild everything with `setup.sh --reset` instead of rerunning one team's files.
 
 ---
 
@@ -101,7 +163,7 @@ Database schemas and role-permission matrices are documented in [`database/c1-id
 
 3. **Initialize the Database:**
 
-   Run the database scripts in order against the `railway` database:
+   To build the shared database with every team's tables, use `database/setup.sh` (see [Running everything](#running-everything)). To build only C1, run the scripts in order against the `railway` database:
 
    ```bash
    createdb railway
@@ -191,6 +253,8 @@ PGHOST=localhost PGUSER=postgres ./database/setup.sh                      # shar
 cd booking-service && PGHOST=localhost PGUSER=postgres JWT_SECRET=<Team 1's secret> ./mvnw spring-boot:run
 ```
 
+The screens (search, passengers, review and pay, PNR status, my bookings) are in [`frontend/`](frontend/README.md). The tables, rules and views are listed in the [data dictionary](database/c3-booking/DATA_DICTIONARY.md).
+
 Tests:
 
 ```bash
@@ -215,7 +279,7 @@ Spring Boot 3 / Java 17 app covering **payments, refunds and passenger concessio
    export RAZORPAY_KEY_ID=rzp_test_xxxxxxxx
    export RAZORPAY_KEY_SECRET=xxxxxxxx
    export RAZORPAY_WEBHOOK_SECRET=any_string_you_choose
-   mvn spring-boot:run
+   ./mvnw spring-boot:run
    ```
    The API is on port 8081. Set `PAYMENTS_PORT` to change it.
 
@@ -268,7 +332,7 @@ All of these need a Team 1 login unless marked public. Customers only see their 
 
 ```bash
 PGHOST=localhost PGUSER=postgres PGDATABASE=railway_test ./database/setup.sh --reset
-PGHOST=localhost PGUSER=postgres mvn test
+PGHOST=localhost PGUSER=postgres ./mvnw test
 ```
 
 The unit tests need no database. The integration tests (`web/*Test`) run against `railway_test`, with Razorpay replaced by a mock, so no real payments are made. They cover:
@@ -317,6 +381,7 @@ The refund is worked out on what was paid for the passengers being cancelled. Th
 - **Waitlisted passengers when the chart is prepared.** If they still have no berth, they should be refunded in full automatically.
 - **A reconciliation job** for orders stuck in `CREATED`.
 - **Error format.** This app answers `{"error": "message"}`, while Team 1 and Team 3 answer `{"error": {"code", "message"}}`.
+- **Gateway errors reach customers word for word.** A refused Razorpay call comes back as e.g. `Could not create refund: Status Code: 404 Server response: {...}`. Log the details and show a plain message instead.
 
 ---
 

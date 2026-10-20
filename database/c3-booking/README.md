@@ -16,6 +16,8 @@ PostgreSQL tables, seed data and tests for the booking module. Table and column 
 | `07_views.sql` | `v_pnr_status`, `v_user_bookings`, `v_run_availability`, `v_run_route` | Team 3 |
 | `seed_dev.sql` | Classes, quotas, concessions, 3 trains / routes, runs for the next 30 days, coaches, 1,202 seats | Team 3 (network data is placeholder) |
 | `tests/run_tests.sh`, `tests/test_db.sql` | Builds a throwaway database; 92 checks plus a 10-session race for the last berth | Team 3 |
+| [`DATA_DICTIONARY.md`](DATA_DICTIONARY.md) | Every table, column, rule, view and function, with the constraint names the database reports | Team 3 |
+| `c3_booking.dbml` | The schema as built, for dbdiagram.io | Team 3 |
 
 Users are not seeded here. Booking uses C1's dev accounts (`customer@example.com`, password `Railway@Dev123`).
 
