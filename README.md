@@ -8,12 +8,98 @@ Full-stack Railway Reservation & Management System featuring ticket booking, PNR
 
 | Team | Module | Responsibility | Tech Stack | Status |
 |---|---|---|---|---|
-| **Team 1** | Users & Auth | Authentication, JWT & refresh tokens, RBAC, password reset, audit logging, identity database | Node.js, Express, PostgreSQL, MongoDB, Brevo API | Backend & database implemented; frontend pending |
+| **Team 1** | Users & Auth | Authentication, JWT & refresh tokens, RBAC, password reset, audit logging, identity database | Node.js, Express, PostgreSQL, MongoDB, Brevo API | Backend & database implemented; frontend pending (Team 3 added a minimal login page to replace) |
 | **Team 2** | Trains, Stations, Routes | Master train catalog, stations, routes, schedules, coaches, seat layouts | TBD | Not started |
-| **Team 3** | Booking, PNR, Seats | Booking management, PNR generation, seat allocation, waitlist | TBD | In progress |
+| **Team 3** | Booking, PNR, Seats | Booking management, PNR generation, seat allocation, waitlist | PostgreSQL, Spring Boot, React + MUI | Database, API and booking screens implemented & tested |
 | **Team 4** | Payments & Refunds | Razorpay payment gateway integration, concession calculations, refund policies | Spring Boot, Razorpay, React + MUI | Implemented |
 | **Team 5** | Reports & Analytics | Reports, analytics, admin dashboards | TBD | Not started |
 | **Team 6** | Notifications, Status, Feedback | Email / SMS notifications, live train status, feedback | TBD | Not started |
+
+---
+
+## Running everything
+
+Three backends, one shared PostgreSQL database and one React app. In development the app's dev server forwards each `/api` path to the backend that owns it, so the browser only talks to http://localhost:5173.
+
+| Service | Folder | Port | Owns |
+|---|---|---|---|
+| Users & Auth (Team 1) | `backend/` | 3000 (`PORT`) | `/api/auth`, `/api/users`, `/api/admin` |
+| Booking (Team 3) | `booking-service/` | 8082 (`BOOKING_PORT`) | `/api/search`, `/api/runs`, `/api/bookings` |
+| Payments (Team 4) | repo root | 8081 (`PAYMENTS_PORT`) | `/api/payments`, `/api/refunds`, `/api/concessions` |
+| Frontend (all teams) | `frontend/` | 5173 | the screens |
+
+### Prerequisites
+
+- **PostgreSQL 14+**, with `psql` on the `PATH` (`setup.sh` uses it).
+- **Node.js 18+**, for Team 1's backend and the frontend.
+- **Java 17.** Maven is not needed: both Spring Boot apps have a `./mvnw` wrapper (`mvnw.cmd` on Windows).
+- **MongoDB 6+** is optional. Team 1 writes its audit log there; without it, logins still work and audit logging is skipped.
+- **Razorpay test-mode keys**, to take payments (Team 4, see below).
+
+### 1. Build the shared database
+
+All teams share one database, `railway`. `database/setup.sh` builds it from each team's SQL in dependency order: C1 identity, then C3 booking, with development data (users, a sample network of trains and runs for the next 30 days).
+
+```bash
+PGHOST=localhost PGUSER=postgres PGPASSWORD=... ./database/setup.sh            # create and fill "railway"
+PGHOST=localhost PGUSER=postgres PGPASSWORD=... ./database/setup.sh --reset    # drop and rebuild it
+```
+
+Team 4's tables are created by the payments app itself (Flyway) the first time it starts, so it must start **after** this step.
+
+### 2. Environment variables
+
+| Variable | Used by | Value |
+|---|---|---|
+| `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD` | `setup.sh` and all three backends | The same everywhere. Defaults: `localhost`, `5432`, `railway`, `postgres` |
+| `JWT_SECRET` | all three backends | **One shared secret**, at least 32 characters. Team 1 signs logins with it; booking and payments check the tokens with it |
+| `MONGO_URI` | Team 1 | e.g. `mongodb://localhost:27017/railway` |
+| `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | payments | Razorpay test-mode keys; the webhook secret is any string you also enter in the Razorpay dashboard |
+| `PORT`, `BOOKING_PORT`, `PAYMENTS_PORT` | Team 1, booking, payments | Only to change the ports above |
+| `AUTH_URL`, `BOOKING_URL`, `PAYMENTS_URL` | frontend dev server | Only when a backend isn't on its default port, e.g. `PAYMENTS_URL=http://localhost:8091` |
+
+Team 1 reads `backend/.env` (copy `backend/.env.example`; see Team 1 below). The Spring Boot apps and the frontend read the environment.
+
+Generate a secret once and use it for all three: `node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"`
+
+### 3. Start the services
+
+Each in its own terminal, after step 1. The backends don't depend on each other at startup, but the payments app needs the booking tables.
+
+```bash
+# shared by the terminals below
+export PGHOST=localhost PGUSER=postgres PGPASSWORD=...
+export JWT_SECRET=<the shared secret>
+
+cd backend && npm ci && npm start                      # Team 1, :3000 (reads backend/.env)
+cd booking-service && ./mvnw spring-boot:run           # Team 3, :8082
+RAZORPAY_KEY_ID=rzp_test_... RAZORPAY_KEY_SECRET=... RAZORPAY_WEBHOOK_SECRET=... \
+  ./mvnw spring-boot:run                               # Team 4, :8081, from the repo root
+cd frontend && npm ci && npm run dev                   # :5173
+```
+
+On Windows use `mvnw.cmd`, and `set NAME=value` instead of `export`.
+
+Open http://localhost:5173 and log in as `customer@example.com` with password `Railway@Dev123` (`staff@` and `admin@example.com` too). Book a ticket from `NDLS` to `MAS`, `BCT` or `NGP` on any of the next 30 days, then pay with Razorpay's test card `4111 1111 1111 1111`.
+
+### Tests
+
+| Suite | Command | Database |
+|---|---|---|
+| Team 1 unit | `cd backend && npm test` | none |
+| Team 1 database | `cd backend && npm run test:db` | `railway_test` |
+| C3 database | `./database/c3-booking/tests/run_tests.sh` | creates and drops `railway_c3_test` |
+| Booking API | `./booking-service/run_tests.sh` | rebuilds `railway_test` |
+| Payments | `PGDATABASE=railway_test ./database/setup.sh --reset && ./mvnw test` | `railway_test` |
+
+All need the `PG*` variables. None of them touch `railway`. Razorpay is mocked in the payments tests, so they need no keys. Several suites rebuild `railway_test`, so run them one at a time.
+
+### Troubleshooting
+
+- **Every call to booking or payments returns 401 after logging in.** The backends don't share the same `JWT_SECRET`.
+- **The payments app stops at startup with a Flyway error about `booking`.** The shared database hasn't been built yet; run step 1 first.
+- **Port 8081 (or another) is already in use.** Start the app on another port (`PAYMENTS_PORT=8091`) and tell the frontend (`PAYMENTS_URL=http://localhost:8091 npm run dev`).
+- **The `booking` foreign key to `users` disappeared.** Team 1's `schema.sql` drops `users` with `CASCADE`. Rebuild everything with `setup.sh --reset` instead of rerunning one team's files.
 
 ---
 
@@ -77,7 +163,7 @@ Database schemas and role-permission matrices are documented in [`database/c1-id
 
 3. **Initialize the Database:**
 
-   Run the database scripts in order against the `railway` database:
+   To build the shared database with every team's tables, use `database/setup.sh` (see [Running everything](#running-everything)). To build only C1, run the scripts in order against the `railway` database:
 
    ```bash
    createdb railway
@@ -156,74 +242,104 @@ Configured in `database/c1-identity/seed_dev_users.sql` (all use password: `Rail
 
 ---
 
+## Team 3 — Booking, PNR & Seats
+
+Search, availability, booking, PNR status and cancellation, with seat allocation, RAC and waitlist.
+- **Database:** [`database/c3-booking/`](database/c3-booking/README.md) holds the tables, triggers, procedures and views where the booking rules live. It also has placeholder copies of the network tables (Team 2) and `concession_rule` (Team 4) until those teams take them over.
+- **API:** [`booking-service/`](booking-service/README.md), Spring Boot on port 8082. It accepts Team 1's login tokens, so it needs the same `JWT_SECRET`.
+
+```bash
+PGHOST=localhost PGUSER=postgres ./database/setup.sh                      # shared database
+cd booking-service && PGHOST=localhost PGUSER=postgres JWT_SECRET=<Team 1's secret> ./mvnw spring-boot:run
+```
+
+The screens (search, passengers, review and pay, PNR status, my bookings) are in [`frontend/`](frontend/README.md). The tables, rules and views are listed in the [data dictionary](database/c3-booking/DATA_DICTIONARY.md).
+
+Tests:
+
+```bash
+PGHOST=localhost PGUSER=postgres ./database/c3-booking/tests/run_tests.sh   # database; builds and drops railway_c3_test
+PGHOST=localhost PGUSER=postgres ./booking-service/run_tests.sh             # API; rebuilds railway_test
+```
+
+---
+
 ## Team 4 — Payments & Refunds (Razorpay Payment Gateway)
 
-Spring Boot 3 / Java 17 prototype covering **payments, refunds and passenger concessions** for a ticket booking system. The booking module here is only a stand-in; swap it for the group's real one later.
+Spring Boot 3 / Java 17 app covering **payments, refunds and passenger concessions** for bookings made through Team 3's booking service. A booking is identified by its **PNR**.
 
 ### Run
 
-1. Get **test mode** keys: Razorpay Dashboard → Account & Settings → API Keys.
-2. Set env vars (or edit `application.properties`):
+1. Build the shared database first; this app's migrations need the booking tables: `PGHOST=localhost PGUSER=postgres ./database/setup.sh`
+2. Get **test mode** keys: Razorpay Dashboard → Account & Settings → API Keys.
+3. Set the environment and start the app. Nothing secret is stored in `application.properties`, so the app won't start without these:
    ```bash
+   export PGHOST=localhost PGUSER=postgres PGPASSWORD=...     # same as setup.sh
+   export JWT_SECRET=...                                      # Team 1's secret
    export RAZORPAY_KEY_ID=rzp_test_xxxxxxxx
    export RAZORPAY_KEY_SECRET=xxxxxxxx
    export RAZORPAY_WEBHOOK_SECRET=any_string_you_choose
-   mvn spring-boot:run
+   ./mvnw spring-boot:run
    ```
-3. Open http://localhost:8080 for the web UI (use the port you set in `server.port`; 8081 if 8080 is taken).
+   The API is on port 8081. Set `PAYMENTS_PORT` to change it.
 
-### Frontend
+Flyway creates this app's tables (`V1`, `V2`). It baselines at version 0, so it also works on the shared database where other teams' tables already exist. Hibernate only validates the schema (`ddl-auto=validate`).
 
-Plain HTML, CSS and JavaScript in `src/main/resources/static/`, served by Spring Boot on the same port as the API, so there is no build step and no CORS setup.
+Logins are Team 1's. Every endpoint except the webhook and the concession preview needs `Authorization: Bearer <token>` from Team 1's `POST /api/auth/login`. The app's old development login (`/api/auth/login` on this port) has been removed.
 
-| File | Purpose |
-|---|---|
-| `index.html` | Two views: **Book a ticket** and **Manage booking** (hash routes `#/book`, `#/manage/{id}`) |
-| `css/style.css` | All styling, with light and dark themes |
-| `js/app.js` | Form validation, live fare, Razorpay Checkout, payment verification, refund flow |
-
-Changes are picked up by refreshing the browser. If you use IntelliJ, rebuild or restart so `static/` is copied to `target/classes`.
-
-Before going live: delete the "Testing with Razorpay test mode?" block in `index.html`.
-
-Default DB is in-memory H2 (zero setup). MySQL config is commented in `application.properties`.
+The screens are in the shared React app, [`frontend/`](frontend/README.md): `components/checkout.js` (Razorpay Checkout for a PNR), `MyPayments`, `Refunds` and `Concessions`. The app no longer serves a copy of the frontend from `src/main/resources/static/`.
 
 ### Flow
 
 ```
-POST /api/bookings            -> concession applied, status PENDING_PAYMENT
-POST /api/payments/order      -> Razorpay order for finalAmount
+(Team 3) POST /api/bookings          -> PNR, HELD for 15 minutes
+POST /api/payments/order {pnr}       -> Razorpay order for the booking's amount (booking.total_fare)
    (browser: Razorpay Checkout)
-POST /api/payments/verify     -> signature check, status CONFIRMED
-POST /api/payments/webhook    -> same result via Razorpay callback (safety net)
-GET  /api/refunds/preview/{bookingId}
-POST /api/refunds             -> cancels booking, refunds per policy
+POST /api/payments/verify            -> signature check; confirm_booking(pnr) in the same transaction
+POST /api/payments/webhook           -> same result via Razorpay callback (safety net)
+GET  /api/refunds/preview/{pnr}?passengerIds=...
+POST /api/refunds {pnr, passengerIds} -> cancel_passengers + Razorpay refund, in one transaction
 ```
+
+- **Payments that can't confirm their booking are refunded in full automatically:**
+  - the 15-minute hold expired before the payment arrived;
+  - passengers were dropped after the order was created, so the amount changed;
+  - a second payment arrived for a booking that's already paid.
+- **Cancellation and refund go together.** If Razorpay refuses the refund, the cancellation is rolled back and the passengers keep their seats.
+- **Unpaid bookings** are cancelled through Team 3's booking service.
 
 ### Endpoints
 
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/api/concessions/preview?category=STUDENT&baseFare=500` | Fare after concession |
-| POST | `/api/bookings` | Create booking |
-| GET | `/api/bookings/{id}` | Booking details/status |
-| POST | `/api/payments/order` | `{ "bookingId": 1 }` |
-| POST | `/api/payments/verify` | `{ razorpayOrderId, razorpayPaymentId, razorpaySignature }` |
-| POST | `/api/payments/webhook` | Razorpay callback |
-| GET | `/api/payments/booking/{id}` | Payments for a booking |
-| GET | `/api/refunds/preview/{bookingId}` | What a cancellation would refund |
-| POST | `/api/refunds` | `{ "bookingId": 1, "reason": "..." }` |
-| GET | `/api/refunds/booking/{id}` | Refunds for a booking |
+All of these need a Team 1 login unless marked public. Customers only see their own bookings; for anyone else's PNR they get 404.
 
-Example booking:
-```json
-{
-  "passengerName": "Asha", "email": "asha@example.com", "phone": "9999999999",
-  "origin": "Pune", "destination": "Mumbai",
-  "departureTime": "2026-10-20T18:30:00",
-  "category": "STUDENT", "baseFare": 500
-}
+| Method | Path | Who | Purpose |
+|---|---|---|---|
+| GET | `/api/concessions/preview?category=STUDENT&baseFare=500` | public | Fare after concession |
+| POST | `/api/payments/order` | CUSTOMER (owner) | `{ "pnr": "1000000016" }` |
+| POST | `/api/payments/verify` | CUSTOMER (owner) | `{ razorpayOrderId, razorpayPaymentId, razorpaySignature }` |
+| POST | `/api/payments/webhook` | Razorpay (HMAC signature) | Razorpay callback |
+| GET | `/api/payments/booking/{pnr}` | owner, STAFF, ADMIN | Payments for a booking |
+| GET | `/api/payments/my` | CUSTOMER | My payments |
+| GET | `/api/refunds/preview/{pnr}?passengerIds=12,13` | owner, STAFF, ADMIN | What cancelling would refund (no ids = everyone left) |
+| POST | `/api/refunds` | owner, STAFF, ADMIN | `{ "pnr": "...", "passengerIds": [12], "reason": "..." }` (no ids = everyone left) |
+| GET | `/api/refunds/booking/{pnr}` | owner, STAFF, ADMIN | Refunds for a booking |
+| GET | `/api/refunds/my` | CUSTOMER | My refunds |
+| POST | `/api/concessions/apply` | CUSTOMER, ADMIN | `{ "pnr", "passengerId", "category", "idCardType", "idCardNumber" }` |
+| GET | `/api/concessions/pending`, POST `/api/concessions/{id}/review` | STAFF, ADMIN | Verify concession documents |
+| GET | `/api/concessions/booking/{pnr}` | owner, STAFF, ADMIN | Applications for a booking |
+
+### Tests
+
+```bash
+PGHOST=localhost PGUSER=postgres PGDATABASE=railway_test ./database/setup.sh --reset
+PGHOST=localhost PGUSER=postgres ./mvnw test
 ```
+
+The unit tests need no database. The integration tests (`web/*Test`) run against `railway_test`, with Razorpay replaced by a mock, so no real payments are made. They cover:
+- order, verify and webhook;
+- late, outdated and duplicate payments;
+- partial and full refunds, and a refused refund rolling the cancellation back;
+- concessions and logins.
 
 ### Concession rules (`application.properties`)
 
@@ -238,11 +354,13 @@ Refund is a percentage of the **amount actually paid** (after concession):
 | 48h or more | 90% |
 | 24h to 48h | 75% |
 | 4h to 24h | 50% |
-| under 4h | not refundable |
+| under 4h | no refund (cancelling is still allowed and frees the seats) |
+
+The refund is worked out on what was paid for the passengers being cancelled. The schema has no departure time yet (Team 2), so departure is taken as the start of the travel day in India (00:00 IST). That never gives more refund than the policy allows.
 
 ### Webhook setup (optional for local testing)
 
-1. Expose your app: `ngrok http 8080`.
+1. Expose your app: `ngrok http 8081`.
 2. Dashboard → Webhooks → Add: URL `https://<ngrok>/api/payments/webhook`, secret = `RAZORPAY_WEBHOOK_SECRET`.
 3. Enable events: `payment.captured`, `payment.failed`, `refund.processed`, `refund.failed`.
 
@@ -252,13 +370,18 @@ Refund is a percentage of the **amount actually paid** (after concession):
 - UPI: `success@razorpay` (success) or `failure@razorpay` (failure).
 - Make sure payments are set to **auto-capture** in Dashboard → Settings → Configuration → Payment Capture, otherwise they stay "authorized" and refunds will fail.
 
-### Things to revisit once the full system is defined
+### Things to revisit
 
-- Replace `Booking` with the real booking/seat module (keep `bookingId` as the link).
-- Move concession and refund rules to a DB table or admin config.
-- Add authentication; today anyone can call the refund endpoint.
-- Partial cancellations (multi-passenger tickets), GST/convenience fee handling.
-- Reconciliation job for orders stuck in `CREATED`.
+- **Concessions have two sources of truth:**
+  - Team 3's `concession_rule` table, applied per passenger at booking, which changes the fare paid;
+  - this app's `concession.*` percentages and staff-verified applications, which don't change the fare yet.
+
+  Agree on one, then remove the other.
+- **Departure time for the refund windows** (see Refund policy).
+- **Waitlisted passengers when the chart is prepared.** If they still have no berth, they should be refunded in full automatically.
+- **A reconciliation job** for orders stuck in `CREATED`.
+- **Error format.** This app answers `{"error": "message"}`, while Team 1 and Team 3 answer `{"error": {"code", "message"}}`.
+- **Gateway errors reach customers word for word.** A refused Razorpay call comes back as e.g. `Could not create refund: Status Code: 404 Server response: {...}`. Log the details and show a plain message instead.
 
 ---
 

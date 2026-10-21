@@ -21,13 +21,17 @@ public class PaymentController {
     private final PaymentService paymentService;
     private final WebhookService webhookService;
 
+    /** Pay for a HELD booking. The amount comes from the booking. */
     @PostMapping("/order")
+    @PreAuthorize("hasRole('CUSTOMER')")
     public OrderResponse createOrder(@Valid @RequestBody CreateOrderRequest req, Authentication auth) {
         Integer userId = extractUserId(auth);
-        return paymentService.createOrder(req.bookingId(), userId);
+        return paymentService.createOrder(req.pnr(), userId);
     }
 
+    /** Called by the browser after Razorpay checkout; confirms the booking (or refunds the payment). */
     @PostMapping("/verify")
+    @PreAuthorize("hasRole('CUSTOMER')")
     public PaymentResponse verify(@Valid @RequestBody VerifyPaymentRequest req, Authentication auth) {
         Integer userId = extractUserId(auth);
         return PaymentResponse.from(paymentService.verify(
@@ -43,12 +47,12 @@ public class PaymentController {
         return ResponseEntity.ok(Map.of("status", "ok"));
     }
 
-    @GetMapping("/booking/{bookingId}")
+    @GetMapping("/booking/{pnr}")
     @PreAuthorize("hasAnyRole('CUSTOMER', 'STAFF', 'ADMIN')")
-    public List<PaymentResponse> forBooking(@PathVariable Long bookingId, Authentication auth) {
+    public List<PaymentResponse> forBooking(@PathVariable String pnr, Authentication auth) {
         Integer userId = extractUserId(auth);
         boolean isStaffOrAdmin = isStaffOrAdmin(auth);
-        return paymentService.forBooking(bookingId, userId, isStaffOrAdmin).stream()
+        return paymentService.forBooking(pnr, userId, isStaffOrAdmin).stream()
                 .map(PaymentResponse::from)
                 .toList();
     }

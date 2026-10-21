@@ -4,38 +4,12 @@ import com.example.gateway.domain.*;
 import jakarta.validation.constraints.*;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.util.List;
 
 public final class Dtos {
 
     private Dtos() {
-    }
-
-    // ---------- Bookings ----------
-    public record CreateBookingRequest(
-            @NotBlank String passengerName,
-            @NotBlank @Email String email,
-            @NotBlank String phone,
-            @NotBlank String origin,
-            @NotBlank String destination,
-            @NotNull @Future LocalDateTime departureTime,
-            @NotNull PassengerCategory category,
-            @NotNull @DecimalMin("1.00") BigDecimal baseFare) {
-    }
-
-    public record BookingResponse(
-            Long id, String passengerName, String email, String phone,
-            String origin, String destination, LocalDateTime departureTime,
-            PassengerCategory category, BigDecimal baseFare,
-            BigDecimal concessionPercent, BigDecimal concessionAmount,
-            BigDecimal finalAmount, BookingStatus status) {
-
-        public static BookingResponse from(Booking b) {
-            return new BookingResponse(b.getId(), b.getPassengerName(), b.getEmail(), b.getPhone(),
-                    b.getOrigin(), b.getDestination(), b.getDepartureTime(),
-                    b.getCategory(), b.getBaseFare(), b.getConcessionPercent(),
-                    b.getConcessionAmount(), b.getFinalAmount(), b.getStatus());
-        }
     }
 
     // ---------- Concession ----------
@@ -44,8 +18,10 @@ public final class Dtos {
             BigDecimal concessionAmount, BigDecimal finalAmount) {
     }
 
+    /** A concession claim for one passenger of a booking (C3 passenger_id). */
     public record ApplyConcessionRequest(
-            @NotNull Long bookingId,
+            @NotBlank String pnr,
+            @NotNull Integer passengerId,
             @NotNull PassengerCategory category,
             String idCardType,
             String idCardNumber,
@@ -58,15 +34,15 @@ public final class Dtos {
     }
 
     public record ConcessionApplicationResponse(
-            Long id, Long bookingId, Integer userId, String passengerName,
+            Long id, String pnr, Integer passengerId, Integer userId, String passengerName,
             PassengerCategory category, String idCardType, String idCardNumber,
             String documentReferenceUrl, BigDecimal discountPercent, BigDecimal discountAmount,
             ConcessionStatus status, Integer verifiedByStaffId, String remarks,
-            LocalDateTime createdAt, LocalDateTime updatedAt) {
+            OffsetDateTime createdAt, OffsetDateTime updatedAt) {
 
         public static ConcessionApplicationResponse from(ConcessionApplication c) {
             return new ConcessionApplicationResponse(
-                    c.getId(), c.getBookingId(), c.getUserId(), c.getPassengerName(),
+                    c.getId(), c.getPnr(), c.getPassengerId(), c.getUserId(), c.getPassengerName(),
                     c.getCategory(), c.getIdCardType(), c.getIdCardNumber(),
                     c.getDocumentReferenceUrl(), c.getDiscountPercent(), c.getDiscountAmount(),
                     c.getStatus(), c.getVerifiedByStaffId(), c.getRemarks(),
@@ -76,11 +52,12 @@ public final class Dtos {
     }
 
     // ---------- Payments ----------
-    public record CreateOrderRequest(@NotNull Long bookingId) {
+    /** Pay for a booking made through the booking service. The amount comes from the booking. */
+    public record CreateOrderRequest(@NotBlank String pnr) {
     }
 
     public record OrderResponse(
-            Long bookingId, String keyId, String orderId, long amountInPaise, String currency) {
+            String pnr, String keyId, String orderId, long amountInPaise, String currency) {
     }
 
     public record VerifyPaymentRequest(
@@ -90,31 +67,36 @@ public final class Dtos {
     }
 
     public record PaymentResponse(
-            Long id, Long bookingId, Integer userId, String razorpayOrderId, String razorpayPaymentId,
+            Long id, String pnr, Integer userId, String razorpayOrderId, String razorpayPaymentId,
             BigDecimal amount, String currency, PaymentStatus status) {
 
         public static PaymentResponse from(Payment p) {
-            return new PaymentResponse(p.getId(), p.getBookingId(), p.getUserId(), p.getRazorpayOrderId(),
+            return new PaymentResponse(p.getId(), p.getPnr(), p.getUserId(), p.getRazorpayOrderId(),
                     p.getRazorpayPaymentId(), p.getAmount(), p.getCurrency(), p.getStatus());
         }
     }
 
     // ---------- Refunds ----------
-    public record RefundRequest(@NotNull Long bookingId, String reason) {
+    /**
+     * Cancel passengers of a paid booking and refund them. No passengerIds (or null)
+     * cancels everyone still on the booking.
+     */
+    public record RefundRequest(@NotBlank String pnr, List<Integer> passengerIds, String reason) {
     }
 
+    /** paidAmount is what was paid for the passengers being cancelled. */
     public record RefundQuote(
-            Long bookingId, BigDecimal paidAmount, BigDecimal refundPercent,
+            String pnr, BigDecimal paidAmount, BigDecimal refundPercent,
             BigDecimal refundAmount, BigDecimal cancellationCharge, String note) {
     }
 
     public record RefundResponse(
-            Long id, Long bookingId, Long paymentId, Integer userId, String razorpayRefundId,
+            Long id, String pnr, Long paymentId, Integer userId, String razorpayRefundId,
             BigDecimal amount, BigDecimal refundPercent, String reason, RefundStatus status,
             Integer processedByStaffId) {
 
         public static RefundResponse from(Refund r) {
-            return new RefundResponse(r.getId(), r.getBookingId(), r.getPaymentId(), r.getUserId(),
+            return new RefundResponse(r.getId(), r.getPnr(), r.getPaymentId(), r.getUserId(),
                     r.getRazorpayRefundId(), r.getAmount(), r.getRefundPercent(),
                     r.getReason(), r.getStatus(), r.getProcessedByStaffId());
         }

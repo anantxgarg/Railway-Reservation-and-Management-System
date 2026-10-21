@@ -5,7 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 @Entity
 @Table(name = "processed_webhook_events")
@@ -26,12 +26,12 @@ public class ProcessedWebhookEvent {
     @Column(columnDefinition = "TEXT")
     private String payloadSummary;
 
-    private LocalDateTime createdAt = LocalDateTime.now();
+    private OffsetDateTime createdAt = OffsetDateTime.now();
 
     public ProcessedWebhookEvent(String eventId, String eventType, String payloadSummary) {
         this.eventId = eventId;
         this.eventType = eventType;
         this.payloadSummary = payloadSummary;
-        this.createdAt = LocalDateTime.now();
+        this.createdAt = OffsetDateTime.now();
     }
 }

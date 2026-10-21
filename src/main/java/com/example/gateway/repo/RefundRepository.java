@@ -9,7 +9,7 @@ import java.util.Optional;
 public interface RefundRepository extends JpaRepository<Refund, Long> {
     Optional<Refund> findByRazorpayRefundId(String razorpayRefundId);
 
-    List<Refund> findByBookingIdOrderByIdDesc(Long bookingId);
+    List<Refund> findByPnrOrderByIdDesc(String pnr);
 
     List<Refund> findByUserIdOrderByIdDesc(Integer userId);
 }

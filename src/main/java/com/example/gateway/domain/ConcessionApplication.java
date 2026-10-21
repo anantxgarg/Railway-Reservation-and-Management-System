@@ -6,7 +6,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 @Entity
 @Table(name = "concession_applications")
@@ -19,7 +19,9 @@ public class ConcessionApplication {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private Long bookingId;
+    private String pnr;
+    /** The passenger of the booking the concession is for (C3 passenger). */
+    private Integer passengerId;
     private Integer userId;
     private String passengerName;
 
@@ -42,6 +44,6 @@ public class ConcessionApplication {
     private Integer verifiedByStaffId;
     private String remarks;
 
-    private LocalDateTime createdAt = LocalDateTime.now();
-    private LocalDateTime updatedAt = LocalDateTime.now();
+    private OffsetDateTime createdAt = OffsetDateTime.now();
+    private OffsetDateTime updatedAt = OffsetDateTime.now();
 }

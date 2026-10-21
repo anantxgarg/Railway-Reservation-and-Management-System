@@ -1,13 +1,8 @@
 package com.example.gateway.service;
 
-import com.example.gateway.domain.Booking;
-import com.example.gateway.domain.BookingStatus;
-import com.example.gateway.domain.Payment;
-import com.example.gateway.domain.PaymentStatus;
-import com.example.gateway.repo.BookingRepository;
 import com.example.gateway.repo.PaymentRepository;
 import com.example.gateway.repo.RefundRepository;
-import com.example.gateway.web.Dtos.RefundQuote;
+import com.example.gateway.repo.ReservationRepository;
 import com.razorpay.RazorpayClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,19 +12,22 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.util.Optional;
+import java.time.Instant;
+import java.time.LocalDate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.Mockito.when;
 
+/** The refund windows, measured from the start of the departure day in India. */
 @ExtendWith(MockitoExtension.class)
 class RefundPolicyTest {
+
+    private static final LocalDate DEPARTURE_DAY = LocalDate.of(2026, 12, 10);
+    private static final Instant DEPARTURE = DEPARTURE_DAY.atStartOfDay(RefundService.RAILWAY_ZONE).toInstant();
 
     @Mock
     private RazorpayClient razorpayClient;
     @Mock
-    private BookingRepository bookingRepo;
+    private ReservationRepository reservationRepo;
     @Mock
     private PaymentRepository paymentRepo;
     @Mock
@@ -39,7 +37,7 @@ class RefundPolicyTest {
 
     @BeforeEach
     void setUp() {
-        refundService = new RefundService(razorpayClient, bookingRepo, paymentRepo, refundRepo);
+        refundService = new RefundService(razorpayClient, reservationRepo, paymentRepo, refundRepo);
         ReflectionTestUtils.setField(refundService, "fullWindowHours", 48L);
         ReflectionTestUtils.setField(refundService, "fullWindowPercent", BigDecimal.valueOf(90));
         ReflectionTestUtils.setField(refundService, "midWindowHours", 24L);
@@ -48,73 +46,37 @@ class RefundPolicyTest {
         ReflectionTestUtils.setField(refundService, "lateWindowPercent", BigDecimal.valueOf(50));
     }
 
-    private Booking createBooking(LocalDateTime departureTime) {
-        Booking b = new Booking();
-        b.setId(100L);
-        b.setStatus(BookingStatus.CONFIRMED);
-        b.setDepartureTime(departureTime);
-        b.setFinalAmount(BigDecimal.valueOf(1000));
-        return b;
-    }
-
-    private Payment createPayment() {
-        Payment p = new Payment();
-        p.setId(200L);
-        p.setBookingId(100L);
-        p.setStatus(PaymentStatus.PAID);
-        p.setAmount(BigDecimal.valueOf(1000));
-        return p;
+    private BigDecimal percentHoursBefore(long hours) {
+        return refundService.policyFor(DEPARTURE_DAY, DEPARTURE.minusSeconds(hours * 3600)).percent();
     }
 
     @Test
     void testRefundAbove48Hours() {
-        Booking booking = createBooking(LocalDateTime.now().plusHours(52));
-        Payment payment = createPayment();
-
-        when(bookingRepo.findById(100L)).thenReturn(Optional.of(booking));
-        when(paymentRepo.findFirstByBookingIdAndStatus(100L, PaymentStatus.PAID)).thenReturn(Optional.of(payment));
-
-        RefundQuote quote = refundService.quote(100L);
-        assertEquals(BigDecimal.valueOf(90), quote.refundPercent());
-        assertEquals(BigDecimal.valueOf(900.00).setScale(2), quote.refundAmount());
+        assertEquals(BigDecimal.valueOf(90), percentHoursBefore(52));
+        assertEquals(BigDecimal.valueOf(90), percentHoursBefore(48));
     }
 
     @Test
     void testRefundBetween24And48Hours() {
-        Booking booking = createBooking(LocalDateTime.now().plusHours(30));
-        Payment payment = createPayment();
-
-        when(bookingRepo.findById(100L)).thenReturn(Optional.of(booking));
-        when(paymentRepo.findFirstByBookingIdAndStatus(100L, PaymentStatus.PAID)).thenReturn(Optional.of(payment));
-
-        RefundQuote quote = refundService.quote(100L);
-        assertEquals(BigDecimal.valueOf(75), quote.refundPercent());
-        assertEquals(BigDecimal.valueOf(750.00).setScale(2), quote.refundAmount());
+        assertEquals(BigDecimal.valueOf(75), percentHoursBefore(30));
     }
 
     @Test
     void testRefundBetween4And24Hours() {
-        Booking booking = createBooking(LocalDateTime.now().plusHours(12));
-        Payment payment = createPayment();
-
-        when(bookingRepo.findById(100L)).thenReturn(Optional.of(booking));
-        when(paymentRepo.findFirstByBookingIdAndStatus(100L, PaymentStatus.PAID)).thenReturn(Optional.of(payment));
-
-        RefundQuote quote = refundService.quote(100L);
-        assertEquals(BigDecimal.valueOf(50), quote.refundPercent());
-        assertEquals(BigDecimal.valueOf(500.00).setScale(2), quote.refundAmount());
+        assertEquals(BigDecimal.valueOf(50), percentHoursBefore(12));
     }
 
     @Test
     void testRefundUnder4Hours() {
-        Booking booking = createBooking(LocalDateTime.now().plusHours(2));
-        Payment payment = createPayment();
+        assertEquals(BigDecimal.ZERO, percentHoursBefore(2));
+        assertEquals(BigDecimal.ZERO, percentHoursBefore(-5));
+    }
 
-        when(bookingRepo.findById(100L)).thenReturn(Optional.of(booking));
-        when(paymentRepo.findFirstByBookingIdAndStatus(100L, PaymentStatus.PAID)).thenReturn(Optional.of(payment));
-
-        RefundQuote quote = refundService.quote(100L);
-        assertEquals(BigDecimal.ZERO, quote.refundPercent());
-        assertEquals(BigDecimal.valueOf(0.00).setScale(2), quote.refundAmount());
+    @Test
+    void departureIsTheStartOfTheDayInIndiaNotUtc() {
+        // 10:00 IST the day before departure is 14 hours before midnight IST
+        Instant dayBefore10am = DEPARTURE_DAY.minusDays(1).atTime(10, 0)
+                .atZone(RefundService.RAILWAY_ZONE).toInstant();
+        assertEquals(BigDecimal.valueOf(50), refundService.policyFor(DEPARTURE_DAY, dayBefore10am).percent());
     }
 }

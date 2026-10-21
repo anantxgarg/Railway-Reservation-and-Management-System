@@ -1,0 +1,243 @@
+// C3 Booking, PNR & Seats — as built by the SQL files in this folder.
+// Paste into https://dbdiagram.io/d to view.
+// Names follow schema_relational.dbml (section C4 Booking). Rules that DBML
+// can't express (triggers, the exclusion constraint) are in the notes and in
+// DATA_DICTIONARY.md.
+
+Project railway_c3 {
+  database_type: 'PostgreSQL'
+  Note: 'Team 3 owns quota, booking, passenger and seat_allocation. The network tables are placeholders for Team 2, concession_rule for Team 4.'
+}
+
+enum booking_status_enum {
+  HELD [note: 'created, awaiting payment; seats held until hold_expires_at']
+  CONFIRMED [note: 'paid']
+  CANCELLED [note: 'every passenger cancelled']
+  EXPIRED [note: 'hold lapsed unpaid']
+}
+
+enum passenger_status_enum {
+  CONFIRMED [note: 'has a seat_allocation row']
+  RAC [note: 'shares a side-lower berth, no seat row']
+  WAITLIST [note: 'queued, no seat']
+  CANCELLED
+}
+
+enum quota_name_enum {
+  General
+  Tatkal
+  Ladies
+  Senior
+}
+
+enum train_type_enum {
+  Express
+  Slow
+  "High-Speed"
+}
+
+// ---------------------------------------------------------------- C1 (Team 1)
+
+Table users {
+  user_id int [pk]
+  Note: 'Owned by Team 1 (database/c1-identity). Only the key is shown here.'
+}
+
+// ------------------------------------------------------ Booking (Team 3)
+
+Table quota {
+  quota_code varchar(10) [pk, note: 'GN, TK, LD, SR']
+  quota_name quota_name_enum [not null, unique]
+  fare_multiplier numeric(5,2) [not null, default: 1.00, note: 'CHECK > 0; 1.30 for Tatkal']
+  description text
+  created_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
+}
+
+Table booking {
+  pnr varchar(10) [pk, note: '9-digit sequence + Luhn check digit (generate_pnr)']
+  user_id int [not null, ref: > users.user_id]
+  run_id int [not null, ref: > train_run.run_id]
+  class_code varchar(10) [not null, ref: > travel_class.class_code]
+  quota_code varchar(10) [not null, ref: > quota.quota_code]
+  from_seq int [not null, note: 'boarding stop: route_station.stop_seq on the run\'s route']
+  to_seq int [not null, note: 'alighting stop; CHECK from_seq < to_seq']
+  total_fare numeric(10,2) [not null, note: 'HELD: fares of passengers not cancelled. CONFIRMED: amount paid, fixed. CHECK >= 0']
+  status booking_status_enum [not null, default: 'HELD']
+  hold_expires_at timestamptz [note: 'set exactly when status = HELD (CHECK)']
+  created_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
+
+  indexes {
+    user_id [name: 'idx_booking_user']
+    (run_id, class_code, quota_code) [name: 'idx_booking_run_class_quota']
+    status [name: 'idx_booking_status']
+    hold_expires_at [name: 'idx_booking_hold_expires', note: 'partial: WHERE status = HELD']
+  }
+
+  Note: '''
+  Triggers: trg_booking_validate (both stops on the run's route, train has the class),
+  trg_booking_guard_update (journey fixed; status HELD -> CONFIRMED | CANCELLED | EXPIRED, CONFIRMED -> CANCELLED).
+  '''
+}
+
+Table passenger {
+  passenger_id int [pk, increment]
+  pnr varchar(10) [not null, ref: > booking.pnr, note: 'ON DELETE CASCADE']
+  concession_id int [ref: > concession_rule.concession_id, note: 'ON DELETE SET NULL']
+  name varchar(100) [not null, note: 'CHECK not blank']
+  age int [not null, note: 'CHECK 1-120']
+  gender char(1) [not null, note: 'M, F or O']
+  status passenger_status_enum [not null]
+  queue_no int [note: 'RAC/waitlist number in (run, class, quota); set exactly when RAC or WAITLIST']
+  passenger_fare numeric(10,2) [not null, note: 'after quota and concession; CHECK >= 0']
+  cancelled_at timestamptz [note: 'set exactly when CANCELLED']
+
+  indexes {
+    pnr [name: 'idx_passenger_pnr']
+    (status, queue_no) [name: 'idx_passenger_queue', note: 'partial: RAC and WAITLIST only']
+  }
+
+  Note: '''
+  At most 6 per PNR, added only while the booking is HELD (trg_passenger_before_insert).
+  Status only moves forward (trg_passenger_guard_update).
+  Keeps booking.total_fare in step while HELD (trg_passenger_sync_total).
+  CONFIRMED exactly when a seat_allocation exists (chk_confirmed_has_seat, deferred to COMMIT).
+  '''
+}
+
+Table seat_allocation {
+  allocation_id int [pk, increment]
+  passenger_id int [not null, unique, ref: - passenger.passenger_id, note: 'ON DELETE CASCADE']
+  seat_id int [not null, ref: > seat.seat_id]
+  run_id int [not null, ref: > train_run.run_id, note: 'copy of booking.run_id for the exclusion constraint']
+  from_seq int [not null, note: 'copy of booking.from_seq']
+  to_seq int [not null, note: 'copy of booking.to_seq; CHECK from_seq < to_seq']
+
+  indexes {
+    run_id [name: 'idx_seat_allocation_run']
+  }
+
+  Note: '''
+  No double booking: excl_seat_allocation_no_overlap is
+  EXCLUDE USING gist (seat_id WITH =, run_id WITH =, int4range(from_seq, to_seq) WITH &&).
+  trg_seat_allocation_validate: same run and stops as the booking, a seat of that train in the booked class.
+  '''
+}
+
+// ------------------------------------------- Concessions (Team 4 placeholder)
+
+Table concession_rule {
+  concession_id int [pk, increment]
+  concession_name varchar(100) [not null, unique]
+  eligibility_rule text [not null, note: 'free text']
+  discount_type varchar(50) [not null, note: 'PERCENTAGE or FIXED_AMOUNT']
+  discount_value numeric(10,2) [not null, note: 'CHECK >= 0']
+  description text
+  is_active boolean [not null, default: true]
+  created_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
+  Note: 'Placeholder for Team 4; used by calc_fare.'
+}
+
+// ---------------------------------------------- Network (Team 2 placeholder)
+
+Table station {
+  station_code varchar(10) [pk, note: 'NDLS, BCT, MAS, ...']
+  station_name varchar(200) [not null]
+  city varchar(100) [not null]
+  state varchar(100) [not null]
+  zone varchar(50)
+  num_platforms int [note: 'CHECK > 0 when set']
+  created_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
+}
+
+Table train {
+  train_no varchar(10) [pk]
+  train_name varchar(200) [not null]
+  train_type train_type_enum [not null, default: 'Express']
+  is_active boolean [not null, default: true]
+  created_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
+}
+
+Table travel_class {
+  class_code varchar(10) [pk, note: '1A, 2A, 3A, SL, 2S']
+  class_name varchar(100) [not null]
+  is_ac boolean [not null, default: false]
+  seats_per_coach int [not null, note: 'CHECK > 0']
+  base_fare_per_km numeric(10,2) [not null, note: 'CHECK > 0']
+  reservation_charge numeric(10,2) [not null, default: 0, note: 'per passenger; CHECK >= 0']
+  created_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
+}
+
+Table route {
+  route_id int [pk, increment]
+  route_code varchar(20) [not null, unique]
+  route_name varchar(200) [not null]
+  created_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
+}
+
+Table route_station {
+  route_id int [not null, ref: > route.route_id, note: 'ON DELETE CASCADE']
+  stop_seq int [not null, note: '1, 2, 3, ...; booking.from_seq/to_seq refer to it']
+  station_code varchar(10) [not null, ref: > station.station_code]
+  distance_km numeric(10,2) [not null, note: 'from the origin']
+  arrival_offset int [note: 'minutes after leaving the origin; NULL at the origin']
+  departure_offset int [not null, note: 'minutes after leaving the origin']
+  day_offset int [not null, default: 0, note: 'days after the run date']
+  default_platform varchar(10)
+
+  indexes {
+    (route_id, stop_seq) [pk]
+    station_code [name: 'idx_route_station_station_code']
+  }
+  Note: 'Offsets are relative to the departure from the origin, whose clock time is not stored yet.'
+}
+
+Table train_schedule {
+  train_no varchar(10) [not null, ref: > train.train_no, note: 'ON DELETE CASCADE']
+  run_day varchar(10) [not null, note: 'Monday .. Sunday']
+  route_id int [not null, ref: > route.route_id]
+  created_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
+
+  indexes {
+    (train_no, run_day) [pk]
+  }
+}
+
+Table train_run {
+  run_id int [pk, increment]
+  train_no varchar(10) [not null, ref: > train.train_no]
+  run_date date [not null, note: 'date the train leaves its origin']
+  status varchar(50) [note: 'SCHEDULED, CANCELLED, ...']
+  created_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
+
+  indexes {
+    (train_no, run_date) [unique, name: 'uq_train_run_train_date']
+    run_date [name: 'idx_train_run_date']
+  }
+  Note: 'The route comes from train_schedule for the weekday of run_date (view v_run_route).'
+}
+
+Table train_coach {
+  train_no varchar(10) [not null, ref: > train.train_no, note: 'ON DELETE CASCADE']
+  coach_no varchar(10) [not null, note: 'B1, S3, ...']
+  class_code varchar(10) [not null, ref: > travel_class.class_code]
+  created_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
+
+  indexes {
+    (train_no, coach_no) [pk]
+  }
+}
+
+Table seat {
+  seat_id int [pk, increment]
+  train_no varchar(10) [not null]
+  coach_no varchar(10) [not null]
+  berth_no varchar(10) [not null]
+  berth_type varchar(50) [note: 'LB/MB/UB/SL/SU, or WS/MS/AS for sitting classes']
+  created_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
+
+  indexes {
+    (train_no, coach_no, berth_no) [unique, name: 'uq_seat_train_coach_berth']
+  }
+}
+
+Ref fk_seat_coach: seat.(train_no, coach_no) > train_coach.(train_no, coach_no) [delete: cascade]
