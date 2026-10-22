@@ -1,0 +1,13 @@
+-- =====================================================================
+-- Team 2 (Trains, Stations & Routes) — C2 Network Schema
+-- =====================================================================
+
+-- Table definitions for the 8 tables will be added here:
+-- 1. train
+-- 2. station
+-- 3. travel_class
+-- 4. route
+-- 5. route_station
+-- 6. train_schedule
+-- 7. train_run
+-- 8. train_coach / seat
