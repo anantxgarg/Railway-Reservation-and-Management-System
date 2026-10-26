@@ -273,3 +273,49 @@ describe('audit content hygiene', () => {
     });
   });
 });
+
+describe('Admin portal login (requiredRole)', () => {
+  const opts = { requiredRole: 'ADMIN' };
+
+  test('ACTIVE ADMIN with correct password gets tokens', async () => {
+    repo.findByEmail.mockResolvedValue(mkUser({ role_name: 'ADMIN' }));
+    const res = await authService.login({ email: 'u@example.com', password: PASSWORD }, {}, opts);
+    expect(res.accessToken).toBeTruthy();
+    expect(res.user.role).toBe('ADMIN');
+  });
+
+  test.each(['CUSTOMER', 'STAFF'])(
+    '%s with CORRECT password is refused: no login recorded, no token issued',
+    async (role_name) => {
+      repo.findByEmail.mockResolvedValue(mkUser({ role_name }));
+      await expect(authService.login({ email: 'u@example.com', password: PASSWORD }, {}, opts))
+        .rejects.toMatchObject({ code: 'ROLE_NOT_PERMITTED' });
+      expect(repo.recordSuccessfulLogin).not.toHaveBeenCalled();
+      expect(repo.insertRefreshToken).not.toHaveBeenCalled();
+      expect(audit.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'LOGIN_BLOCKED', result: 'FAILURE' }));
+    }
+  );
+
+  test.each(['LOCKED', 'SUSPENDED', 'INACTIVE', 'PENDING'])(
+    '%s ADMIN is refused with no token',
+    async (status) => {
+      repo.findByEmail.mockResolvedValue(mkUser({ role_name: 'ADMIN', status }));
+      await expect(authService.login({ email: 'u@example.com', password: PASSWORD }, {}, opts))
+        .rejects.toMatchObject({ code: 'ACCOUNT_NOT_ACTIVE' });
+      expect(repo.insertRefreshToken).not.toHaveBeenCalled();
+    }
+  );
+
+  test('wrong password for an ADMIN still counts toward lockout and gives INVALID_CREDENTIALS', async () => {
+    repo.findByEmail.mockResolvedValue(mkUser({ role_name: 'ADMIN' }));
+    await expect(authService.login({ email: 'u@example.com', password: 'Wrong@Pass1' }, {}, opts))
+      .rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' });
+    expect(repo.incrementFailedLogin).toHaveBeenCalled();
+  });
+
+  test('a wrong password for a CUSTOMER reveals nothing about role (INVALID_CREDENTIALS)', async () => {
+    repo.findByEmail.mockResolvedValue(mkUser({ role_name: 'CUSTOMER' }));
+    await expect(authService.login({ email: 'u@example.com', password: 'Wrong@Pass1' }, {}, opts))
+      .rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' });
+  });
+});

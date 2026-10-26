@@ -16,6 +16,20 @@ export const authService = {
   },
 
   /**
+   * Authenticate for the Admin Portal. Backend issues tokens only to ACTIVE ADMINs.
+   * Endpoint: POST /api/auth/admin-login
+   */
+  async adminLogin({ email, password }) {
+    return apiRequest('/api/auth/admin-login', {
+      method: 'POST',
+      body: {
+        email: email.trim(),
+        password,
+      },
+    });
+  },
+
+  /**
    * Register a new customer account
    * Endpoint: POST /api/auth/register
    */

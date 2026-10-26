@@ -4,10 +4,12 @@ import { AuthProvider } from './context/AuthContext';
 import { useAuth } from './context/useAuth';
 import { getRoleDestination } from './utils/roleUtils';
 import ProtectedRoute from './components/ProtectedRoute';
+import AdminRoute from './components/AdminRoute';
 
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import AdminLoginPage from './pages/AdminLoginPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import UnauthorizedPage from './pages/UnauthorizedPage';
 
@@ -51,6 +53,7 @@ function App() {
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/unauthorized" element={<UnauthorizedPage />} />
+          <Route path="/admin/login" element={<AdminLoginPage />} />
 
           {/* Role-Protected Destinations */}
           <Route
@@ -72,9 +75,9 @@ function App() {
           <Route
             path="/admin"
             element={
-              <ProtectedRoute allowedRoles={['ADMIN']}>
+              <AdminRoute>
                 <AdminPortal />
-              </ProtectedRoute>
+              </AdminRoute>
             }
           />
 

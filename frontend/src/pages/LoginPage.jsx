@@ -216,7 +216,10 @@ export default function LoginPage() {
               disabled={isSubmitting}
               autoComplete="current-password"
             />
-            <div className="forgot-password-link-container">
+            <div className="forgot-password-link-container login-links-row">
+              <Link to="/admin/login" className="text-link admin-login-link" id="login-as-admin">
+                Login as Admin
+              </Link>
               <Link to="/forgot-password" className="text-link forgot-link">
                 Forgot Password?
               </Link>
