@@ -25,11 +25,11 @@ public class ScheduleService {
         return scheduleRepository.findAll();
     }
 
-    public List<TrainSchedule> getSchedulesByTrainNo(String trainNo) {
+    public List<TrainSchedule> getSchedulesByTrainNo(Integer trainNo) {
         return scheduleRepository.findByTrainNo(trainNo);
     }
 
-    public Optional<TrainSchedule> getSchedule(String trainNo, String runDay) {
+    public Optional<TrainSchedule> getSchedule(Integer trainNo, String runDay) {
         return scheduleRepository.findByTrainNoAndDay(trainNo, runDay);
     }
 
@@ -37,7 +37,7 @@ public class ScheduleService {
         scheduleRepository.save(schedule);
     }
 
-    public boolean deleteSchedule(String trainNo, String runDay) {
+    public boolean deleteSchedule(Integer trainNo, String runDay) {
         return scheduleRepository.deleteByTrainNoAndDay(trainNo, runDay);
     }
 
@@ -45,11 +45,11 @@ public class ScheduleService {
         return runRepository.findAll();
     }
 
-    public Optional<TrainRun> getRunById(Long runId) {
+    public Optional<TrainRun> getRunById(Integer runId) {
         return runRepository.findById(runId);
     }
 
-    public List<TrainRun> getRunsByTrainNo(String trainNo) {
+    public List<TrainRun> getRunsByTrainNo(Integer trainNo) {
         return runRepository.findByTrainNo(trainNo);
     }
 
@@ -61,7 +61,7 @@ public class ScheduleService {
         runRepository.save(run);
     }
 
-    public boolean deleteRun(Long runId) {
+    public boolean deleteRun(Integer runId) {
         return runRepository.deleteById(runId);
     }
 }

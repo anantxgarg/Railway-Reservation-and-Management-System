@@ -23,7 +23,7 @@ public class TrainController {
     }
 
     @GetMapping("/{trainNo}")
-    public ResponseEntity<Train> getTrainByNo(@PathVariable String trainNo) {
+    public ResponseEntity<Train> getTrainByNo(@PathVariable Integer trainNo) {
         return trainService.getTrainByNo(trainNo)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
@@ -36,7 +36,7 @@ public class TrainController {
     }
 
     @DeleteMapping("/{trainNo}")
-    public ResponseEntity<Void> deleteTrain(@PathVariable String trainNo) {
+    public ResponseEntity<Void> deleteTrain(@PathVariable Integer trainNo) {
         if (trainService.removeTrain(trainNo)) {
             return ResponseEntity.noContent().build();
         }

@@ -19,7 +19,7 @@ public class TrainCoachRepository {
 
     private final RowMapper<TrainCoach> rowMapper = (rs, rowNum) -> {
         TrainCoach coach = new TrainCoach();
-        coach.setTrainNo(rs.getString("train_no"));
+        coach.setTrainNo(rs.getInt("train_no"));
         coach.setCoachNo(rs.getString("coach_no"));
         coach.setClassCode(rs.getString("class_code"));
         return coach;
@@ -32,7 +32,7 @@ public class TrainCoachRepository {
         );
     }
 
-    public List<TrainCoach> findByTrainNo(String trainNo) {
+    public List<TrainCoach> findByTrainNo(Integer trainNo) {
         return jdbcTemplate.query(
                 "SELECT train_no, coach_no, class_code FROM train_coach WHERE train_no = ? ORDER BY coach_no",
                 rowMapper,
@@ -40,7 +40,7 @@ public class TrainCoachRepository {
         );
     }
 
-    public Optional<TrainCoach> findByTrainNoAndCoachNo(String trainNo, String coachNo) {
+    public Optional<TrainCoach> findByTrainNoAndCoachNo(Integer trainNo, String coachNo) {
         try {
             TrainCoach coach = jdbcTemplate.queryForObject(
                     "SELECT train_no, coach_no, class_code FROM train_coach WHERE train_no = ? AND coach_no = ?",
@@ -61,7 +61,7 @@ public class TrainCoachRepository {
         jdbcTemplate.update(sql, coach.getTrainNo(), coach.getCoachNo(), coach.getClassCode());
     }
 
-    public boolean deleteByTrainNoAndCoachNo(String trainNo, String coachNo) {
+    public boolean deleteByTrainNoAndCoachNo(Integer trainNo, String coachNo) {
         return jdbcTemplate.update("DELETE FROM train_coach WHERE train_no = ? AND coach_no = ?", trainNo, coachNo) > 0;
     }
 }

@@ -28,12 +28,12 @@ public class ScheduleController {
     }
 
     @GetMapping("/train/{trainNo}")
-    public List<TrainSchedule> getSchedulesByTrainNo(@PathVariable String trainNo) {
+    public List<TrainSchedule> getSchedulesByTrainNo(@PathVariable Integer trainNo) {
         return scheduleService.getSchedulesByTrainNo(trainNo);
     }
 
     @GetMapping("/train/{trainNo}/{runDay}")
-    public ResponseEntity<TrainSchedule> getSchedule(@PathVariable String trainNo, @PathVariable String runDay) {
+    public ResponseEntity<TrainSchedule> getSchedule(@PathVariable Integer trainNo, @PathVariable String runDay) {
         return scheduleService.getSchedule(trainNo, runDay)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
@@ -46,7 +46,7 @@ public class ScheduleController {
     }
 
     @DeleteMapping("/train/{trainNo}/{runDay}")
-    public ResponseEntity<Void> deleteSchedule(@PathVariable String trainNo, @PathVariable String runDay) {
+    public ResponseEntity<Void> deleteSchedule(@PathVariable Integer trainNo, @PathVariable String runDay) {
         if (scheduleService.deleteSchedule(trainNo, runDay)) {
             return ResponseEntity.noContent().build();
         }
@@ -61,14 +61,14 @@ public class ScheduleController {
     }
 
     @GetMapping("/runs/{runId}")
-    public ResponseEntity<TrainRun> getRunById(@PathVariable Long runId) {
+    public ResponseEntity<TrainRun> getRunById(@PathVariable Integer runId) {
         return scheduleService.getRunById(runId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
     @GetMapping("/runs/train/{trainNo}")
-    public List<TrainRun> getRunsByTrainNo(@PathVariable String trainNo) {
+    public List<TrainRun> getRunsByTrainNo(@PathVariable Integer trainNo) {
         return scheduleService.getRunsByTrainNo(trainNo);
     }
 
@@ -84,7 +84,7 @@ public class ScheduleController {
     }
 
     @DeleteMapping("/runs/{runId}")
-    public ResponseEntity<Void> deleteRun(@PathVariable Long runId) {
+    public ResponseEntity<Void> deleteRun(@PathVariable Integer runId) {
         if (scheduleService.deleteRun(runId)) {
             return ResponseEntity.noContent().build();
         }

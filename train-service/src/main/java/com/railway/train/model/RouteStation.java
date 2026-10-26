@@ -1,18 +1,29 @@
 package com.railway.train.model;
+
 import java.math.BigDecimal;
 import java.time.LocalTime;
 
 public class RouteStation {
-    private String routeId;
+    private Integer trainNo;
     private int stopSeq;
     private String stationCode;
     private BigDecimal distanceKm;
     private LocalTime arrivalTime;
     private LocalTime departureTime;
 
-    // Getters and Setters
-    public String getRouteId() { return routeId; }
-    public void setRouteId(String routeId) { this.routeId = routeId; }
+    public RouteStation() {}
+
+    public RouteStation(Integer trainNo, int stopSeq, String stationCode, BigDecimal distanceKm, LocalTime arrivalTime, LocalTime departureTime) {
+        this.trainNo = trainNo;
+        this.stopSeq = stopSeq;
+        this.stationCode = stationCode;
+        this.distanceKm = distanceKm;
+        this.arrivalTime = arrivalTime;
+        this.departureTime = departureTime;
+    }
+
+    public Integer getTrainNo() { return trainNo; }
+    public void setTrainNo(Integer trainNo) { this.trainNo = trainNo; }
     public int getStopSeq() { return stopSeq; }
     public void setStopSeq(int stopSeq) { this.stopSeq = stopSeq; }
     public String getStationCode() { return stationCode; }

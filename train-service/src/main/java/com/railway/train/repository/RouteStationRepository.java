@@ -18,7 +18,7 @@ public class RouteStationRepository {
 
     private final RowMapper<RouteStation> rowMapper = (rs, rowNum) -> {
         RouteStation routeStation = new RouteStation();
-        routeStation.setRouteId(rs.getString("route_id"));
+        routeStation.setTrainNo(rs.getInt("train_no"));
         routeStation.setStopSeq(rs.getInt("stop_seq"));
         routeStation.setStationCode(rs.getString("station_code"));
         routeStation.setDistanceKm(rs.getBigDecimal("distance_km"));
@@ -31,28 +31,28 @@ public class RouteStationRepository {
 
     public List<RouteStation> findAll() {
         return jdbcTemplate.query(
-                "SELECT route_id, stop_seq, station_code, distance_km, arrival_time, departure_time FROM route_station ORDER BY route_id, stop_seq",
+                "SELECT train_no, stop_seq, station_code, distance_km, arrival_time, departure_time FROM route_station ORDER BY train_no, stop_seq",
                 rowMapper
         );
     }
 
-    public List<RouteStation> findByRouteId(String routeId) {
+    public List<RouteStation> findByTrainNo(Integer trainNo) {
         return jdbcTemplate.query(
-                "SELECT route_id, stop_seq, station_code, distance_km, arrival_time, departure_time FROM route_station WHERE route_id = ? ORDER BY stop_seq",
+                "SELECT train_no, stop_seq, station_code, distance_km, arrival_time, departure_time FROM route_station WHERE train_no = ? ORDER BY stop_seq",
                 rowMapper,
-                routeId
+                trainNo
         );
     }
 
     public void save(RouteStation rs) {
-        String sql = "INSERT INTO route_station (route_id, stop_seq, station_code, distance_km, arrival_time, departure_time) " +
+        String sql = "INSERT INTO route_station (train_no, stop_seq, station_code, distance_km, arrival_time, departure_time) " +
                      "VALUES (?, ?, ?, ?, ?, ?) " +
-                     "ON CONFLICT (route_id, stop_seq) DO UPDATE SET " +
+                     "ON CONFLICT (train_no, stop_seq) DO UPDATE SET " +
                      "station_code = EXCLUDED.station_code, distance_km = EXCLUDED.distance_km, " +
                      "arrival_time = EXCLUDED.arrival_time, departure_time = EXCLUDED.departure_time";
         jdbcTemplate.update(
                 sql,
-                rs.getRouteId(),
+                rs.getTrainNo(),
                 rs.getStopSeq(),
                 rs.getStationCode(),
                 rs.getDistanceKm(),
@@ -61,7 +61,7 @@ public class RouteStationRepository {
         );
     }
 
-    public boolean deleteByRouteIdAndStopSeq(String routeId, int stopSeq) {
-        return jdbcTemplate.update("DELETE FROM route_station WHERE route_id = ? AND stop_seq = ?", routeId, stopSeq) > 0;
+    public boolean deleteByTrainNoAndStopSeq(Integer trainNo, int stopSeq) {
+        return jdbcTemplate.update("DELETE FROM route_station WHERE train_no = ? AND stop_seq = ?", trainNo, stopSeq) > 0;
     }
 }

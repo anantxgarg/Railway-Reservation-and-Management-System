@@ -19,19 +19,20 @@ public class TrainRepository {
 
     private final RowMapper<Train> rowMapper = (rs, rowNum) -> {
         Train train = new Train();
-        train.setTrainNo(rs.getString("train_no"));
+        train.setTrainNo(rs.getInt("train_no"));
         train.setTrainName(rs.getString("train_name"));
+        train.setIsActive(rs.getObject("is_active") != null ? rs.getBoolean("is_active") : true);
         return train;
     };
 
     public List<Train> findAllTrains() {
-        return jdbcTemplate.query("SELECT train_no, train_name FROM train ORDER BY train_no", rowMapper);
+        return jdbcTemplate.query("SELECT train_no, train_name, is_active FROM train ORDER BY train_no", rowMapper);
     }
 
-    public Optional<Train> findByTrainNo(String trainNo) {
+    public Optional<Train> findByTrainNo(Integer trainNo) {
         try {
             Train train = jdbcTemplate.queryForObject(
-                    "SELECT train_no, train_name FROM train WHERE train_no = ?",
+                    "SELECT train_no, train_name, is_active FROM train WHERE train_no = ?",
                     rowMapper,
                     trainNo
             );
@@ -42,12 +43,12 @@ public class TrainRepository {
     }
 
     public void save(Train train) {
-        String sql = "INSERT INTO train (train_no, train_name) VALUES (?, ?) " +
-                     "ON CONFLICT (train_no) DO UPDATE SET train_name = EXCLUDED.train_name";
-        jdbcTemplate.update(sql, train.getTrainNo(), train.getTrainName());
+        String sql = "INSERT INTO train (train_no, train_name, is_active) VALUES (?, ?, ?) " +
+                     "ON CONFLICT (train_no) DO UPDATE SET train_name = EXCLUDED.train_name, is_active = EXCLUDED.is_active";
+        jdbcTemplate.update(sql, train.getTrainNo(), train.getTrainName(), train.getIsActive() != null ? train.getIsActive() : true);
     }
 
-    public boolean deleteByTrainNo(String trainNo) {
+    public boolean deleteByTrainNo(Integer trainNo) {
         return jdbcTemplate.update("DELETE FROM train WHERE train_no = ?", trainNo) > 0;
     }
 }

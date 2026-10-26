@@ -21,8 +21,8 @@ public class TrainRunRepository {
 
     private final RowMapper<TrainRun> rowMapper = (rs, rowNum) -> {
         TrainRun run = new TrainRun();
-        run.setRunId(rs.getLong("run_id"));
-        run.setTrainNo(rs.getString("train_no"));
+        run.setRunId(rs.getInt("run_id"));
+        run.setTrainNo(rs.getInt("train_no"));
         Date d = rs.getDate("run_date");
         run.setRunDate(d != null ? d.toLocalDate() : null);
         run.setStatus(rs.getString("status"));
@@ -36,7 +36,7 @@ public class TrainRunRepository {
         );
     }
 
-    public Optional<TrainRun> findById(Long runId) {
+    public Optional<TrainRun> findById(Integer runId) {
         try {
             TrainRun run = jdbcTemplate.queryForObject(
                     "SELECT run_id, train_no, run_date, status FROM train_run WHERE run_id = ?",
@@ -49,7 +49,7 @@ public class TrainRunRepository {
         }
     }
 
-    public List<TrainRun> findByTrainNo(String trainNo) {
+    public List<TrainRun> findByTrainNo(Integer trainNo) {
         return jdbcTemplate.query(
                 "SELECT run_id, train_no, run_date, status FROM train_run WHERE train_no = ? ORDER BY run_date DESC",
                 rowMapper,
@@ -72,7 +72,7 @@ public class TrainRunRepository {
         jdbcTemplate.update(sql, run.getTrainNo(), Date.valueOf(run.getRunDate()), run.getStatus() != null ? run.getStatus() : "SCHEDULED");
     }
 
-    public boolean deleteById(Long runId) {
+    public boolean deleteById(Integer runId) {
         return jdbcTemplate.update("DELETE FROM train_run WHERE run_id = ?", runId) > 0;
     }
 }
