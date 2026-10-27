@@ -2,7 +2,7 @@
 
 Every table, column and rule created by the SQL files in this folder, as built by `database/setup.sh`. The diagram is [`c3_booking.dbml`](c3_booking.dbml) (paste it into dbdiagram.io).
 
-- **Owner** says which team is responsible. Team 3 owns `quota`, `booking`, `passenger`, `seat_allocation` and `notification_outbox`. `concession_rule` is a placeholder for Team 4. The network tables are Team 2's ([C2 data dictionary](../c2-network/DATA_DICTIONARY.md)).
+- **Owner** says which team is responsible. Team 3 owns `quota`, `booking`, `passenger`, `seat_allocation` and `notification_outbox`. `concession_rule` is Team 4's. The network tables are Team 2's ([C2 data dictionary](../c2-network/DATA_DICTIONARY.md)).
 - **Rule names** (`chk_*`, `trg_*`, `excl_*`) are what the database reports when it refuses a change, and the booking API returns them in `error.constraint`. For triggers, see the "Reported as" column under [Cross-row rules](#cross-row-rules).
 - All timestamps are `TIMESTAMPTZ`. All money is `NUMERIC(10,2)` in rupees.
 
@@ -11,7 +11,7 @@ Every table, column and rule created by the SQL files in this folder, as built b
 - [Enums](#enums)
 - [Booking tables (Team 3)](#booking-tables-team-3): `quota`, `booking`, `passenger`, `seat_allocation`
 - [Cross-row rules](#cross-row-rules)
-- [Concessions (placeholder, Team 4)](#concessions-placeholder-team-4): `concession_rule`
+- [Concessions (Team 4)](#concessions-team-4): `concession_rule`
 - [Network (Team 2)](#network-team-2): moved to `database/c2-network`
 - [Notifications for Team 6](#notifications-for-team-6): `notification_outbox`
 - [Views](#views)
@@ -142,24 +142,26 @@ Defined in `05_constraints_triggers.sql`. A refusal raises SQLSTATE `23514` and 
 
 Besides these, every procedure that hands out berths takes an advisory lock on (run, class). Concurrent bookings of one class are therefore served one at a time; `tests/` races 10 sessions for the last berth.
 
-## Concessions (placeholder, Team 4)
+## Concessions (Team 4)
 
 ### `concession_rule`
 
-Discounts per passenger, applied by `calc_fare` at booking. File `02_quota_concession.sql`.
+The concessions and their discounts, applied per passenger by `calc_fare` at booking; the payments app reads the same rows (`GET /api/concessions/rules`). File `02_quota_concession.sql`.
 
 | Column | Type | Null | Default | Description |
 |---|---|---|---|---|
 | `concession_id` | `SERIAL` | no | | **PK** |
+| `category` | `VARCHAR(30)` | no | | Unique code used by the payments API, e.g. `STUDENT`. `chk_concession_category`: upper case and `_` |
 | `concession_name` | `VARCHAR(100)` | no | | Unique |
 | `eligibility_rule` | `TEXT` | no | | Free text |
 | `discount_type` | `VARCHAR(50)` | no | | `PERCENTAGE` or `FIXED_AMOUNT` (`chk_concession_discount_type`) |
 | `discount_value` | `NUMERIC(10,2)` | no | | Percent 0-100, or rupees. `chk_concession_discount_value`: >= 0 |
+| `min_age`, `max_age` | `INTEGER` | yes | | Ages allowed; `create_booking` refuses others (`22023`). `chk_concession_ages`: min <= max |
 | `description` | `TEXT` | yes | | |
 | `is_active` | `BOOLEAN` | no | `true` | Inactive rules can't be used for new bookings |
 | `created_at` | `TIMESTAMPTZ` | no | now | |
 
-Team 4's payments app keeps its own concession percentages and staff-verified applications (`concession_applications`). The two need to become one; see the root README.
+Team 4's payments app keeps the documents for a passenger's concession and the staff decision (`concession_applications`).
 
 ## Network (Team 2)
 

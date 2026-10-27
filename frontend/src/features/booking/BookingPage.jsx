@@ -13,6 +13,7 @@ import { navigate } from '../../router';
 import {
   BOOKING_STATUS_COLOR, PASSENGER_STATUS_COLOR, formatDate, formatDateTime, mmss, rupees, useCountdown
 } from './format';
+import { useConcessionRules } from './concessions';
 
 const HOLD_MS = 15 * 60 * 1000;
 
@@ -34,6 +35,7 @@ export default function BookingPage({ pnr, user }) {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [paying, setPaying] = useState(false);
   const [message, setMessage] = useState(null);
+  const concessions = useConcessionRules();
 
   const load = useCallback(async () => {
     try {
@@ -182,7 +184,14 @@ export default function BookingPage({ pnr, user }) {
                       </TableCell>
                     )}
                     <TableCell>{p.passengerNo}</TableCell>
-                    <TableCell>{p.name}</TableCell>
+                    <TableCell>
+                      {p.name}
+                      {p.concessionId != null && (
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          {concessions.find((c) => c.concessionId === p.concessionId)?.name || 'Concession'}
+                        </Typography>
+                      )}
+                    </TableCell>
                     <TableCell>{p.age} {p.gender}</TableCell>
                     <TableCell>
                       <Chip label={p.label} size="small" color={PASSENGER_STATUS_COLOR[p.status]} sx={{ fontWeight: 600 }} />

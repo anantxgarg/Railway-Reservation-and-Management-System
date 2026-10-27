@@ -293,7 +293,7 @@ The first version of train-service connected to a hosted (Neon) database with it
 ## Team 3 — Booking, PNR & Seats
 
 Search, availability, booking, PNR status and cancellation, with seat allocation, RAC and waitlist.
-- **Database:** [`database/c3-booking/`](database/c3-booking/README.md) holds the tables, triggers, procedures and views where the booking rules live, on top of Team 2's network tables. It still has a placeholder `concession_rule` (Team 4). `08_notifications.sql` is the notification outbox for Team 6.
+- **Database:** [`database/c3-booking/`](database/c3-booking/README.md) holds the tables, triggers, procedures and views where the booking rules live, on top of Team 2's network tables. Its `concession_rule` table is Team 4's list of concessions, applied at booking. `08_notifications.sql` is the notification outbox for Team 6.
 - **Notifications:** booking-service delivers `notification_outbox` to Team 6's notification-service every few seconds (with Team 6's `NotificationHandle`), and queues journey reminders 24 hours before departure. Set `NOTIFICATIONS_URL` and `NOTIFICATIONS_API_KEY` if notification-service isn't on its defaults.
 - **API:** [`booking-service/`](booking-service/README.md), Spring Boot on port 8082. It accepts Team 1's login tokens, so it needs the same `JWT_SECRET`.
 
@@ -363,6 +363,7 @@ All of these need a Team 1 login unless marked public. Customers only see their 
 
 | Method | Path | Who | Purpose |
 |---|---|---|---|
+| GET | `/api/concessions/rules` | public | The concessions a passenger can be booked with (the `concession_rule` table) |
 | GET | `/api/concessions/preview?category=STUDENT&baseFare=500` | public | Fare after concession |
 | POST | `/api/payments/order` | CUSTOMER (owner) | `{ "pnr": "1000000016" }` |
 | POST | `/api/payments/verify` | CUSTOMER (owner) | `{ razorpayOrderId, razorpayPaymentId, razorpaySignature }` |
@@ -373,7 +374,7 @@ All of these need a Team 1 login unless marked public. Customers only see their 
 | POST | `/api/refunds` | owner, STAFF, ADMIN | `{ "pnr": "...", "passengerIds": [12], "reason": "..." }` (no ids = everyone left) |
 | GET | `/api/refunds/booking/{pnr}` | owner, STAFF, ADMIN | Refunds for a booking |
 | GET | `/api/refunds/my` | CUSTOMER | My refunds |
-| POST | `/api/concessions/apply` | CUSTOMER, ADMIN | `{ "pnr", "passengerId", "category", "idCardType", "idCardNumber" }` |
+| POST | `/api/concessions/apply` | CUSTOMER, ADMIN | `{ "pnr", "passengerId", "idCardType", "idCardNumber", "documentReferenceUrl" }`: documents for the concession the passenger was booked with |
 | GET | `/api/concessions/pending`, POST `/api/concessions/{id}/review` | STAFF, ADMIN | Verify concession documents |
 | GET | `/api/concessions/booking/{pnr}` | owner, STAFF, ADMIN | Applications for a booking |
 
@@ -390,9 +391,23 @@ The unit tests need no database. The integration tests (`web/*Test`) run against
 - partial and full refunds, and a refused refund rolling the cancellation back;
 - concessions and logins.
 
-### Concession rules (`application.properties`)
+### Concessions
 
-Percent off base fare: GENERAL 0, SENIOR_CITIZEN 40, STUDENT 25, CHILD 50, DIFFERENTLY_ABLED 50, ARMED_FORCES 30. These are placeholder numbers; change them to whatever the group agrees on.
+The concessions are the rows of the shared `concession_rule` table (`database/c3-booking/seed_dev.sql`); there is no second list in this app.
+
+| `category` | Discount | Ages |
+|---|---|---|
+| `SENIOR_CITIZEN` | 40% | 60 or more |
+| `STUDENT` | 25% | |
+| `CHILD` | 50% | 5 to 11 |
+| `DIFFERENTLY_ABLED` | 50% | |
+| `ARMED_FORCES` | 30% | |
+
+1. **Booking.** Each passenger may be booked with one (`concessionId` in booking-service's `POST /api/bookings`). Team 3's `calc_fare` takes it off the distance fare (not the reservation charge), and `create_booking` refuses a passenger outside its ages.
+2. **Documents.** The customer then sends the documents for it (`POST /api/concessions/apply`). The application records the concession and the discount the booking gave; a passenger booked without one can't apply.
+3. **Review.** Staff approve or reject the application. A rejection is recorded; the fare isn't changed afterwards (collecting the difference is not built).
+
+The numbers are placeholders; change them in the seed (or the table) to whatever the group agrees on.
 
 ### Refund policy (`application.properties`)
 
@@ -423,15 +438,9 @@ Paid bookings, payments and refunds also queue Team 6 notifications (`BOOKING_CO
 
 ### Things to revisit
 
-- **Concessions have two sources of truth:**
-  - Team 3's `concession_rule` table, applied per passenger at booking, which changes the fare paid;
-  - this app's `concession.*` percentages and staff-verified applications, which don't change the fare yet.
-
-  Agree on one, then remove the other.
+- **A rejected concession** is only recorded. The fare was already reduced at booking, so the difference should be collected, or the passenger cancelled.
 - **Waitlisted passengers when the chart is prepared.** If they still have no berth, they should be refunded in full automatically.
 - **A reconciliation job** for orders stuck in `CREATED`.
-- **Error format.** This app answers `{"error": "message"}`, while Teams 1, 2 and 3 answer `{"error": {"code", "message"}}`.
-- **Gateway errors reach customers word for word.** A refused Razorpay call comes back as e.g. `Could not create refund: Status Code: 404 Server response: {...}`. Log the details and show a plain message instead.
 
 ---
 

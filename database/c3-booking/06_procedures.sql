@@ -130,6 +130,15 @@ BEGIN
         SELECT * FROM jsonb_to_recordset(p_passengers)
             AS t(name TEXT, age INTEGER, gender TEXT, concession_id INTEGER)
     LOOP
+        -- a concession's age limits (concession_rule, Team 4); documents are checked by staff
+        IF x.concession_id IS NOT NULL AND EXISTS (
+               SELECT 1 FROM concession_rule
+               WHERE concession_id = x.concession_id
+                 AND (x.age < min_age OR x.age > max_age)) THEN
+            RAISE EXCEPTION 'passenger % (age %) is not eligible for the % concession', x.name, x.age,
+                (SELECT concession_name FROM concession_rule WHERE concession_id = x.concession_id)
+                USING ERRCODE = 'invalid_parameter_value';
+        END IF;
         v_fare := calc_fare(p_run_id, p_class_code, p_quota_code, p_from_seq, p_to_seq, x.concession_id);
 
         -- every passenger starts on the waitlist, then moves up if possible

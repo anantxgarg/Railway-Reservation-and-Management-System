@@ -32,7 +32,8 @@ public class WebhookService {
                 throw ApiException.badRequest("Invalid webhook signature");
             }
         } catch (RazorpayException e) {
-            throw ApiException.badRequest("Webhook signature check failed: " + e.getMessage());
+            log.warn("Webhook signature check failed", e);
+            throw ApiException.badRequest("Invalid webhook signature");
         }
 
         JSONObject json = new JSONObject(payload);

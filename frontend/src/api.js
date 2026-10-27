@@ -86,7 +86,9 @@ export const api = {
   getMyPayments: () => apiRequest('/api/payments/my'),
   getPaymentsForBooking: (pnr) => apiRequest(`/api/payments/booking/${encodeURIComponent(pnr)}`),
 
-  // Concessions
+  // Concessions: the list is the shared concession_rule table; a passenger gets
+  // one at booking, and applications send the documents for it
+  getConcessionRules: () => apiRequest('/api/concessions/rules'),
   getConcessionPreview: (category, baseFare) =>
     apiRequest(`/api/concessions/preview?${query({ category, baseFare })}`),
   applyConcession: (payload) => apiRequest('/api/concessions/apply', 'POST', payload),

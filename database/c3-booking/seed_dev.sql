@@ -16,9 +16,13 @@ INSERT INTO quota (quota_code, quota_name, fare_multiplier, description) VALUES
 ('SR', 'Senior',  1.00, 'Reserved for senior citizens');
 
 -- ---------------------------------------------------------------------
--- Concession rules (placeholder data; Team 4 owns concessions)
+-- Concession rules (Team 4). The payments app and the booking form read
+-- them from here; change the numbers here only.
 -- ---------------------------------------------------------------------
-INSERT INTO concession_rule (concession_name, eligibility_rule, discount_type, discount_value, description) VALUES
-('Senior Citizen', 'Age >= 60',                  'PERCENTAGE', 40.00, 'Discount for passengers aged 60 and above'),
-('Child',          'Age 5 to 11',                'PERCENTAGE', 50.00, 'Discount for children aged 5-11'),
-('Disabled',       'Has disability certificate', 'PERCENTAGE', 75.00, 'Discount for passengers with disabilities');
+INSERT INTO concession_rule (category, concession_name, eligibility_rule, discount_type, discount_value,
+                             min_age, max_age, description) VALUES
+('SENIOR_CITIZEN',    'Senior Citizen',    'Age 60 or more',                         'PERCENTAGE', 40.00, 60,   NULL, 'Proof of age, e.g. Aadhaar'),
+('STUDENT',           'Student',           'Full-time student',                      'PERCENTAGE', 25.00, NULL, NULL, 'Student identity card'),
+('CHILD',             'Child',             'Age 5 to 11',                            'PERCENTAGE', 50.00, 5,    11,   'Proof of age, e.g. birth certificate'),
+('DIFFERENTLY_ABLED', 'Differently Abled', 'Holds a disability certificate',         'PERCENTAGE', 50.00, NULL, NULL, 'Disability certificate'),
+('ARMED_FORCES',      'Armed Forces',      'Serving member of the armed forces',     'PERCENTAGE', 30.00, NULL, NULL, 'Service identity card');

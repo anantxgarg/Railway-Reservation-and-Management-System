@@ -1,7 +1,6 @@
 package com.example.gateway.web;
 
 import com.example.gateway.domain.ConcessionApplication;
-import com.example.gateway.domain.PassengerCategory;
 import com.example.gateway.service.ConcessionService;
 import com.example.gateway.web.Dtos.*;
 import jakarta.validation.Valid;
@@ -21,10 +20,16 @@ public class ConcessionController {
 
     private final ConcessionService concessionService;
 
+    /** The concessions a passenger can be booked with (shared concession_rule table). */
+    @GetMapping("/rules")
+    public List<ConcessionRuleResponse> rules() {
+        return concessionService.rules().stream().map(ConcessionRuleResponse::from).toList();
+    }
+
     /** Lets the UI show the discounted fare before the passenger commits. */
     @GetMapping("/preview")
     public ConcessionResult preview(
-            @RequestParam(required = false, defaultValue = "GENERAL") PassengerCategory category,
+            @RequestParam(required = false, defaultValue = ConcessionService.GENERAL) String category,
             @RequestParam(required = false, defaultValue = "1000.00") BigDecimal baseFare) {
         return concessionService.calculate(category, baseFare);
     }

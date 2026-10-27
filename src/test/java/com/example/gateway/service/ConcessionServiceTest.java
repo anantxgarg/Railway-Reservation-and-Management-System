@@ -2,8 +2,10 @@ package com.example.gateway.service;
 
 import com.example.gateway.domain.ConcessionApplication;
 import com.example.gateway.domain.ConcessionStatus;
-import com.example.gateway.domain.PassengerCategory;
 import com.example.gateway.repo.ConcessionApplicationRepository;
+import com.example.gateway.repo.ConcessionRuleRepository;
+import com.example.gateway.repo.ConcessionRuleRepository.PassengerConcession;
+import com.example.gateway.repo.ConcessionRuleRepository.Rule;
 import com.example.gateway.repo.ReservationRepository;
 import com.example.gateway.repo.ReservationRepository.PassengerInfo;
 import com.example.gateway.repo.ReservationRepository.Reservation;
@@ -20,6 +22,7 @@ import java.time.LocalDate;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -27,8 +30,13 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class ConcessionServiceTest {
 
+    private static final Rule SENIOR = rule(1, "SENIOR_CITIZEN", "PERCENTAGE", 40);
+    private static final Rule STUDENT = rule(2, "STUDENT", "PERCENTAGE", 25);
+
     @Mock
     private ConcessionApplicationRepository concessionRepo;
+    @Mock
+    private ConcessionRuleRepository rules;
     @Mock
     private ReservationRepository reservations;
 
@@ -36,32 +44,36 @@ class ConcessionServiceTest {
 
     @BeforeEach
     void setUp() {
-        concessionService = new ConcessionService(
-                concessionRepo,
-                reservations,
-                BigDecimal.ZERO,
-                BigDecimal.valueOf(40), // senior citizen: 40%
-                BigDecimal.valueOf(25), // student: 25%
-                BigDecimal.valueOf(50), // child: 50%
-                BigDecimal.valueOf(50), // differently abled: 50%
-                BigDecimal.valueOf(30)  // armed forces: 30%
-        );
+        concessionService = new ConcessionService(concessionRepo, rules, reservations);
+    }
+
+    private static Rule rule(int id, String category, String type, int value) {
+        return new Rule(id, category, category, "", type, BigDecimal.valueOf(value), null, null, null);
     }
 
     @Test
-    void testCalculateSeniorCitizen() {
-        ConcessionResult result = concessionService.calculate(PassengerCategory.SENIOR_CITIZEN, BigDecimal.valueOf(1000));
+    void percentagesComeFromTheConcessionTable() {
+        when(rules.byCategory("SENIOR_CITIZEN")).thenReturn(Optional.of(SENIOR));
+        ConcessionResult result = concessionService.calculate("SENIOR_CITIZEN", BigDecimal.valueOf(1000));
         assertEquals(BigDecimal.valueOf(40), result.percent());
         assertEquals(BigDecimal.valueOf(400.00).setScale(2), result.concessionAmount());
         assertEquals(BigDecimal.valueOf(600.00).setScale(2), result.finalAmount());
     }
 
     @Test
-    void testCalculateStudent() {
-        ConcessionResult result = concessionService.calculate(PassengerCategory.STUDENT, BigDecimal.valueOf(1000));
-        assertEquals(BigDecimal.valueOf(25), result.percent());
-        assertEquals(BigDecimal.valueOf(250.00).setScale(2), result.concessionAmount());
-        assertEquals(BigDecimal.valueOf(750.00).setScale(2), result.finalAmount());
+    void fixedAmountNeverGoesBelowZero() {
+        when(rules.byCategory("PASS")).thenReturn(Optional.of(rule(3, "PASS", "FIXED_AMOUNT", 300)));
+        ConcessionResult result = concessionService.calculate("PASS", BigDecimal.valueOf(200));
+        assertNull(result.percent());
+        assertEquals(BigDecimal.valueOf(200), result.concessionAmount());
+        assertEquals(BigDecimal.ZERO, result.finalAmount());
+    }
+
+    @Test
+    void generalHasNoDiscountAndUnknownIsRefused() {
+        assertEquals(BigDecimal.valueOf(1000), concessionService.calculate("GENERAL", BigDecimal.valueOf(1000)).finalAmount());
+        when(rules.byCategory("ROYALTY")).thenReturn(Optional.empty());
+        assertThrows(ApiException.class, () -> concessionService.calculate("ROYALTY", BigDecimal.TEN));
     }
 
     @Test
@@ -69,28 +81,42 @@ class ConcessionServiceTest {
         when(reservations.find("1000000016")).thenReturn(Optional.of(
                 new Reservation("1000000016", 5, "CONFIRMED", BigDecimal.valueOf(1000), false, LocalDate.now(), null)));
         assertThrows(ApiException.class, () -> concessionService.createApplication(
-                "1000000016", 7, 6, false, PassengerCategory.STUDENT, null, null, null));
+                "1000000016", 7, 6, false, "STUDENT", null, null, null));
+    }
+
+    private void studentPassenger() {
+        when(reservations.find("1000000016")).thenReturn(Optional.of(
+                new Reservation("1000000016", 5, "CONFIRMED", BigDecimal.valueOf(790), false, LocalDate.now(), null)));
+        when(reservations.passenger("1000000016", 7)).thenReturn(Optional.of(
+                new PassengerInfo(7, "Rahul Sharma", BigDecimal.valueOf(790), "CONFIRMED")));
+        when(rules.ofPassenger(7)).thenReturn(Optional.of(
+                new PassengerConcession(STUDENT, BigDecimal.valueOf(790), BigDecimal.valueOf(1040))));
+    }
+
+    @Test
+    void applicationIsForTheConcessionTheyWereBookedWith() {
+        studentPassenger();
+        ApiException e = assertThrows(ApiException.class, () -> concessionService.createApplication(
+                "1000000016", 7, 5, false, "SENIOR_CITIZEN", null, null, null));
+        assertEquals("INVALID_INPUT", e.getCode());
     }
 
     @Test
     void testCreateApplicationAndReview() {
-        ConcessionApplication mockApp = new ConcessionApplication();
-        mockApp.setId(10L);
-        mockApp.setStatus(ConcessionStatus.PENDING);
-
-        when(concessionRepo.save(any(ConcessionApplication.class))).thenReturn(mockApp);
-        when(concessionRepo.findById(10L)).thenReturn(Optional.of(mockApp));
-        when(reservations.find("1000000016")).thenReturn(Optional.of(
-                new Reservation("1000000016", 5, "CONFIRMED", BigDecimal.valueOf(1000), false, LocalDate.now(), null)));
-        when(reservations.passenger("1000000016", 7)).thenReturn(Optional.of(
-                new PassengerInfo(7, "Rahul Sharma", BigDecimal.valueOf(1000), "CONFIRMED")));
+        studentPassenger();
+        when(concessionRepo.save(any(ConcessionApplication.class))).thenAnswer(inv -> inv.getArgument(0));
 
         ConcessionApplication app = concessionService.createApplication(
-                "1000000016", 7, 5, false, PassengerCategory.STUDENT,
+                "1000000016", 7, 5, false, null,
                 "STUDENT_ID", "STU12345", "https://docs.railway.test/stu12345.pdf"
         );
         assertEquals(ConcessionStatus.PENDING, app.getStatus());
+        assertEquals("STUDENT", app.getCategory());
+        assertEquals(BigDecimal.valueOf(25), app.getDiscountPercent());
+        assertEquals(BigDecimal.valueOf(250), app.getDiscountAmount());
 
+        app.setId(10L);
+        when(concessionRepo.findById(10L)).thenReturn(Optional.of(app));
         ConcessionApplication reviewed = concessionService.review(10L, ConcessionStatus.APPROVED, 99, "Verified ID card");
         assertEquals(ConcessionStatus.APPROVED, reviewed.getStatus());
         assertEquals(99, reviewed.getVerifiedByStaffId());

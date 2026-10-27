@@ -6,7 +6,7 @@
 
 Project railway_c3 {
   database_type: 'PostgreSQL'
-  Note: 'Team 3 owns quota, booking, passenger, seat_allocation and notification_outbox. The network tables are Team 2\'s (database/c2-network/c2_network.dbml); concession_rule is a placeholder for Team 4.'
+  Note: 'Team 3 owns quota, booking, passenger, seat_allocation and notification_outbox. The network tables are Team 2\'s (database/c2-network/c2_network.dbml); concession_rule is Team 4\'s list of concessions.'
 }
 
 enum booking_status_enum {
@@ -117,18 +117,21 @@ Table seat_allocation {
   '''
 }
 
-// ------------------------------------------- Concessions (Team 4 placeholder)
+// ------------------------------------------------------ Concessions (Team 4)
 
 Table concession_rule {
   concession_id int [pk, increment]
+  category varchar(30) [not null, unique, note: 'code used by the payments API, e.g. STUDENT']
   concession_name varchar(100) [not null, unique]
   eligibility_rule text [not null, note: 'free text']
   discount_type varchar(50) [not null, note: 'PERCENTAGE or FIXED_AMOUNT']
   discount_value numeric(10,2) [not null, note: 'CHECK >= 0']
+  min_age int [note: 'create_booking checks it; NULL = no limit']
+  max_age int [note: 'create_booking checks it; NULL = no limit']
   description text
   is_active boolean [not null, default: true]
   created_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
-  Note: 'Placeholder for Team 4; used by calc_fare.'
+  Note: 'Team 4\'s concessions; calc_fare applies them at booking, the payments app reads them.'
 }
 
 // ------------------------------------------ Network (Team 2, database/c2-network)

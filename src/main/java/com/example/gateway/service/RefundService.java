@@ -215,7 +215,8 @@ public class RefundService {
             r.setStatus("processed".equalsIgnoreCase(rzpStatus) ? RefundStatus.PROCESSED : RefundStatus.PENDING);
         } catch (RazorpayException e) {
             log.error("Razorpay refund failed", e);
-            throw ApiException.gateway("Could not create refund: " + e.getMessage());
+            throw ApiException.gateway("The payment gateway refused the refund, so nothing was cancelled. "
+                    + "Please try again later.");
         }
     }
 

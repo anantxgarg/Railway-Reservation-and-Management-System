@@ -40,16 +40,16 @@ public class SecurityConfig {
                         .requestMatchers("/error").permitAll()
                         // Razorpay calls this directly; secured by the HMAC signature
                         .requestMatchers(HttpMethod.POST, "/api/payments/webhook").permitAll()
-                        // Public fare preview
-                        .requestMatchers(HttpMethod.GET, "/api/concessions/preview").permitAll()
+                        // Public: the concessions and the fare preview
+                        .requestMatchers(HttpMethod.GET, "/api/concessions/rules", "/api/concessions/preview").permitAll()
                         // Everything else needs a Team 1 login; roles are checked per endpoint
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(e -> e
                         .authenticationEntryPoint((req, res, ex) ->
-                                write(res, HttpServletResponse.SC_UNAUTHORIZED, "Authentication required"))
+                                write(res, HttpServletResponse.SC_UNAUTHORIZED, "UNAUTHORIZED", "Authentication required"))
                         .accessDeniedHandler((req, res, ex) ->
-                                write(res, HttpServletResponse.SC_FORBIDDEN, "Your role cannot do this")))
+                                write(res, HttpServletResponse.SC_FORBIDDEN, "FORBIDDEN", "Your role cannot do this")))
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
@@ -63,9 +63,10 @@ public class SecurityConfig {
         return registration;
     }
 
-    private static void write(HttpServletResponse res, int status, String message) throws java.io.IOException {
+    /** The shared error body (GlobalExceptionHandler), for refusals made before a controller runs. */
+    private static void write(HttpServletResponse res, int status, String code, String message) throws java.io.IOException {
         res.setStatus(status);
         res.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        res.getWriter().write("{\"error\":\"" + message + "\"}");
+        res.getWriter().write("{\"error\":{\"code\":\"" + code + "\",\"message\":\"" + message + "\"}}");
     }
 }

@@ -8,7 +8,7 @@
 # Database name comes from PGDATABASE (default: railway). Connection settings use
 # the standard PG* environment variables (PGHOST, PGPORT, PGUSER, PGPASSWORD).
 #
-# Order: C1 identity -> C2 network -> C3 booking (incl. concession placeholder).
+# Order: C1 identity -> C2 network -> C3 booking (incl. Team 4's concession_rule).
 # Team 4's app creates its own tables on startup (Flyway), so start it afterwards.
 set -euo pipefail
 cd "$(dirname "$0")"

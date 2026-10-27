@@ -171,7 +171,7 @@ SELECT pg_temp.expect('fare: tatkal multiplies the distance fare by 1.3 (4538)',
     calc_fare(:raj5, '3A', 'TK', 1, 4) = 4538.00);
 SELECT pg_temp.expect('fare: 40% senior concession applies to the distance fare only (2116)',
     calc_fare(:raj5, '3A', 'GN', 1, 4,
-              (SELECT concession_id FROM concession_rule WHERE concession_name = 'Senior Citizen')) = 2116.00);
+              (SELECT concession_id FROM concession_rule WHERE category = 'SENIOR_CITIZEN')) = 2116.00);
 SELECT pg_temp.expect_error('fare: stops not on the route rejected',
     format('SELECT calc_fare(%s, %L, %L, 1, 9)', :raj5, '3A', 'GN'), '22023');
 SELECT pg_temp.expect_error('fare: unknown concession rejected',
@@ -210,6 +210,14 @@ SELECT pg_temp.expect_error('create_booking: run marked ARRIVED (train-service) 
 SELECT pg_temp.expect_error('create_booking: invalid passenger (age 0) rejected',
     format('SELECT create_booking(%s, %s, %L, %L, 1, 4, %L)', :uid, :raj5, '3A', 'GN',
            '[{"name":"Baby","age":0,"gender":"F"}]'), '23514', 'chk_passenger_age');
+SELECT pg_temp.expect_error('create_booking: senior concession refused for a 30-year-old',
+    format('SELECT create_booking(%s, %s, %L, %L, 1, 4, %L)', :uid, :raj5, '3A', 'GN',
+           jsonb_build_array(jsonb_build_object('name', 'Ravi', 'age', 30, 'gender', 'M', 'concession_id',
+               (SELECT concession_id FROM concession_rule WHERE category = 'SENIOR_CITIZEN')))), '22023');
+SELECT pg_temp.expect_error('create_booking: child concession refused for a 12-year-old',
+    format('SELECT create_booking(%s, %s, %L, %L, 1, 4, %L)', :uid, :raj5, '3A', 'GN',
+           jsonb_build_array(jsonb_build_object('name', 'Mira', 'age', 12, 'gender', 'F', 'concession_id',
+               (SELECT concession_id FROM concession_rule WHERE category = 'CHILD')))), '22023');
 
 INSERT INTO train_run (train_no, run_date, status) VALUES ('12127', CURRENT_DATE - 1, 'SCHEDULED');
 SELECT pg_temp.expect_error('create_booking: train that already left rejected',

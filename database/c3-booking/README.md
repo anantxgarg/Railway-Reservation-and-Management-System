@@ -7,7 +7,7 @@ PostgreSQL tables, seed data and tests for the booking module. Table and column 
 | File | What it does | Owner |
 |---|---|---|
 | `00_extensions_enums.sql` | `btree_gist`; enums for quota, booking and passenger status | Team 3 |
-| `02_quota_concession.sql` | `quota` (Team 3); `concession_rule` | `concession_rule`: **Team 4** (placeholder) |
+| `02_quota_concession.sql` | `quota` (Team 3); `concession_rule` | `concession_rule`: **Team 4** |
 | `03_booking.sql` | `booking`, `passenger`, `seat_allocation` | Team 3 |
 | `04_functions.sql` | PNR generation, route of a run, fares, free seats, RAC capacity, availability | Team 3 (`calc_fare` is a placeholder for Team 4) |
 | `05_constraints_triggers.sql` | No double booking, max 6 passengers, journey and status rules, fare totals | Team 3 |
@@ -31,7 +31,7 @@ Users are not seeded here. Booking uses C1's dev accounts (`customer@example.com
 | Expire | `CALL expire_holds()` | Unpaid holds past expiry → `EXPIRED`, berths go to the queue. [`booking-service`](../../booking-service/README.md) runs it every minute. |
 | Status | `SELECT * FROM v_pnr_status WHERE pnr = ...` | One row per passenger, `status_label` like `CNF/B1/23/LB`, `RAC 3`, `WL 12`. |
 
-`passengers_json` is an array of 1-6 objects: `{"name": "Asha Rao", "age": 34, "gender": "F", "concession_id": null}`.
+`passengers_json` is an array of 1-6 objects: `{"name": "Asha Rao", "age": 34, "gender": "F", "concession_id": null}`. A passenger outside the concession's `min_age`/`max_age` is refused (`22023`).
 
 **No double booking.** Two layers: every procedure that hands out berths takes an advisory lock on the (run, class), so concurrent bookings are served one at a time; and an exclusion constraint on `seat_allocation` rejects any overlapping use of a berth on the same run, whatever code tries it. Journeys that touch at a stop don't overlap, so a berth freed at KOTA is resold from KOTA.
 
@@ -63,4 +63,4 @@ Builds `railway_c3_test`, runs every check inside a rolled-back transaction, run
 - **Team 1:** `booking.user_id` references `users(user_id)`. Re-running C1's `schema.sql` drops `users` with `CASCADE`, which removes this foreign key; rebuild with `setup.sh --reset` instead.
 - **Team 2:** the network tables and their seed data are now in `database/c2-network`, with the departure time from the first stop (`route.departure_time`). Booking refuses runs that are `CANCELLED` or `ARRIVED`; marking a run `ARRIVED` in train-service calls `queue_journey_completed`.
 - **Team 6:** booking-service delivers `notification_outbox` to your `POST /api/notifications`; see `08_notifications.sql` for which event comes from where.
-- **Team 4:** a booking is identified by `pnr VARCHAR(10)`. `booking.total_fare` is the amount to charge while `HELD` (passengers not cancelled) and the amount paid once `CONFIRMED`. On payment success call `confirm_booking(pnr)` in the same transaction that marks the payment successful. Paid bookings are cancelled by your refund endpoint calling `cancel_passengers`, in the same transaction as the refund. Both are done in the payments app (`ReservationRepository`). `concession_rule` and `calc_fare` are placeholders for yours.
+- **Team 4:** a booking is identified by `pnr VARCHAR(10)`. `booking.total_fare` is the amount to charge while `HELD` (passengers not cancelled) and the amount paid once `CONFIRMED`. On payment success call `confirm_booking(pnr)` in the same transaction that marks the payment successful. Paid bookings are cancelled by your refund endpoint calling `cancel_passengers`, in the same transaction as the refund. Both are done in the payments app (`ReservationRepository`). `concession_rule` is your list of concessions (the payments app reads it; `create_booking` applies it and checks its ages); `calc_fare` is a placeholder for your fare rules.

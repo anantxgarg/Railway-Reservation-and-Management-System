@@ -137,7 +137,7 @@ class RefundFlowTest extends PaymentApiTestBase {
         String other = book(CUSTOMER, 1, 6);
         refund(CUSTOMER, pnr, List.of(passengerId(other, 1)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("is not an active passenger")));
+                .andExpect(jsonPath("$.error.message").value(org.hamcrest.Matchers.containsString("is not an active passenger")));
     }
 
     /**
@@ -151,7 +151,10 @@ class RefundFlowTest extends PaymentApiTestBase {
         int p1 = passengerId(pnr, 1);
         when(razorpay.payments.refund(anyString(), any())).thenThrow(new RazorpayException("refund declined"));
         try {
-            refund(CUSTOMER, pnr, null).andExpect(status().isBadGateway());
+            refund(CUSTOMER, pnr, null).andExpect(status().isBadGateway())
+                    .andExpect(jsonPath("$.error.code").value("GATEWAY_ERROR"))
+                    .andExpect(jsonPath("$.error.message").value(org.hamcrest.Matchers.not(
+                            org.hamcrest.Matchers.containsString("refund declined"))));
             assertThat(passengerStatus(p1)).isEqualTo("CONFIRMED");
             assertThat(bookingStatus(pnr)).isEqualTo("CONFIRMED");
             assertThat(jdbc.queryForObject("SELECT count(*) FROM refunds WHERE pnr = ?", Integer.class, pnr)).isZero();

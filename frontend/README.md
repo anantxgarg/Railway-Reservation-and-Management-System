@@ -26,11 +26,11 @@ Start the backends first (see the root README). A new path needs a line in `vite
 | `/login`, `/register`, `/forgot-password`, `/reset-password` | Sign in, create an account, reset a password | everyone | Team 1 |
 | `/admin/login` | Admin-only sign in (`POST /api/auth/admin-login`) | admins | Team 1 |
 | `/search`, `/search/{from}/{to}/{date}` | Search trains, with availability and fare per class | all | Team 3 |
-| `/book/{runId}/{class}/{from}/{to}` | Passenger form, 1 to 6 passengers; holds the seats | customers | Team 3 |
+| `/book/{runId}/{class}/{from}/{to}` | Passenger form, 1 to 6 passengers, each with an optional concession (Team 4's list); holds the seats | customers | Team 3 |
 | `/pnr/{pnr}` | Review the held booking with its 15-minute countdown and pay; PNR status; cancel passengers (unpaid) or cancel with refund (paid) | all | Team 3, payment and refund steps by Team 4 |
 | `/pnr` | PNR lookup | all | Team 3 |
 | `/bookings` | My bookings | customers | Team 3 |
-| `/payments`, `/refunds`, `/concessions` | My payments, refunds, concession applications and staff review | customers (`/payments`), all | Team 4 |
+| `/payments`, `/refunds`, `/concessions` | My payments, refunds, documents for the concessions passengers were booked with, and staff review | customers (`/payments`), all | Team 4 |
 | `/live-status`, `/live-status/{pnr}` | Where the train of a PNR is, station by station (from train-service) | all | Team 6, data from Team 2 |
 | `/trains` | Trains with weekdays, stops, timetable, coaches; for staff also the day's runs, to set status and delay | all | Team 2 |
 | `/notifications` (bell in the header) | Notification centre; a "journey completed" one opens the feedback form | all | Team 6 |
@@ -60,7 +60,8 @@ src/
   utils/                  token storage, validation, roles
 
   # Team 3: booking
-  features/booking/       search, passenger form, booking/PNR page, my bookings
+  features/booking/       search, passenger form, booking/PNR page, my bookings;
+                          concessions.js loads Team 4's concession list
 
   # Team 4: payments
   components/             checkout.js (Razorpay), MyPayments, Refunds, Concessions
@@ -79,7 +80,7 @@ src/
 - **Stations and times.** The search page picks stations from Team 2's list and shows Team 2's timetable times.
 - **Team 6 demo buttons** (fake journey, reset) show on the notification centre only when the app is started with `VITE_TEAM6_DEMO=true` (and notification-service with `TEAM6_DEMO=true`).
 - **Themes.** The account pages have Team 1's light and dark themes. The logged-in app is dark; it switches Team 1's cards to dark while it is shown.
-- **Errors.** Team 1, Team 2 and Team 3 answer `{"error": {"code", "message"}}`, Team 4 `{"error": "message"}`, Team 6 Spring's `{"error", "message"}`; `errorMessage()` in `api.js` reads all of them.
+- **Errors.** Teams 1 to 4 answer `{"error": {"code", "message"}}`, Team 6 Spring's `{"error", "message"}`; `errorMessage()` in `api.js` reads all of them.
 - **Payment.** `/pnr/{pnr}` hands a held booking to `payForBooking()` in `components/checkout.js`. It asks Team 4 for a Razorpay order (Team 4 reads the amount from the booking), opens Razorpay Checkout, and sends the result to `/api/payments/verify`, which confirms the booking. Razorpay's `checkout.js` is loaded in `index.html`.
 - **Cancelling.** An unpaid booking is cancelled by the booking service (`POST /api/bookings/{pnr}/cancel`). A paid one goes to Team 4 (`GET /api/refunds/preview/{pnr}`, then `POST /api/refunds`), which cancels the passengers and refunds them in one transaction.
 
