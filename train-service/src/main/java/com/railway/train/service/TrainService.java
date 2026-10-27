@@ -19,7 +19,7 @@ public class TrainService {
         return trainRepository.findAllTrains();
     }
 
-    public Optional<Train> getTrainByNo(Integer trainNo) {
+    public Optional<Train> getTrainByNo(String trainNo) {
         return trainRepository.findByTrainNo(trainNo);
     }
 
@@ -27,7 +27,7 @@ public class TrainService {
         trainRepository.save(train);
     }
 
-    public boolean removeTrain(Integer trainNo) {
+    public boolean removeTrain(String trainNo) {
         return trainRepository.deleteByTrainNo(trainNo);
     }
 }

@@ -1,27 +1,23 @@
-#!/bin/bash
-
+#!/usr/bin/env bash
 # =========================================================================
 # C2-Network Database Setup Orchestration Script
+#
+# Builds only the C2 network tables, for working on them alone. The whole
+# system's database (C1 + C2 + C3) is built by ../setup.sh instead.
+#
+# Usage:  PGHOST=localhost PGUSER=postgres PGDATABASE=railway_c2 ./database/c2-network/setup.sh
+# Connection settings come from the standard PG* environment variables;
+# nothing is stored in this file.
 # =========================================================================
+set -euo pipefail
+cd "$(dirname "$0")"
 
-echo "Starting C2-Network database setup..."
+PSQL=(psql -X -q -v ON_ERROR_STOP=1 -o /dev/null)
+export PGOPTIONS="${PGOPTIONS:--c client_min_messages=warning}"
 
-# Direct Neon PostgreSQL Connection String
-DB_URL="postgresql://neondb_owner:npg_du79hBYtnHfE@ep-shy-math-b4p3r1cw-pooler.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require"
-
-echo "Running 01_network_schema.sql (or schema.sql)..."
-psql "$DB_URL" -f schema.sql
-
-echo "Running functions.sql..."
-psql "$DB_URL" -f functions.sql
-
-echo "Running triggers.sql..."
-psql "$DB_URL" -f triggers.sql
-
-echo "Running views.sql..."
-psql "$DB_URL" -f views.sql
-
-echo "Running seed_dev.sql..."
-psql "$DB_URL" -f seed_dev.sql
-
+echo "Starting C2-Network database setup on ${PGDATABASE:-railway}..."
+for f in schema functions triggers views seed_dev; do
+  echo "Running $f.sql..."
+  "${PSQL[@]}" -f "$f.sql"
+done
 echo "C2-Network database setup completed successfully!"

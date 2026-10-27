@@ -18,7 +18,7 @@ public class RouteStationService {
         return routeStationRepository.findAll();
     }
 
-    public List<RouteStation> getStationsForTrain(Integer trainNo) {
+    public List<RouteStation> getStationsForTrain(String trainNo) {
         return routeStationRepository.findByTrainNo(trainNo);
     }
 
@@ -26,7 +26,7 @@ public class RouteStationService {
         routeStationRepository.save(routeStation);
     }
 
-    public boolean deleteRouteStation(Integer trainNo, int stopSeq) {
-        return routeStationRepository.deleteByTrainNoAndStopSeq(trainNo, stopSeq);
+    public boolean deleteRouteStation(int routeId, int stopSeq) {
+        return routeStationRepository.deleteByRouteIdAndStopSeq(routeId, stopSeq);
     }
 }

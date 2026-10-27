@@ -1,20 +1,25 @@
 package com.railway.train.model;
 
+import jakarta.validation.constraints.NotBlank;
+
 public class TrainCoach {
-    private Integer trainNo;
+    @NotBlank(message = "is required")
+    private String trainNo;
+    @NotBlank(message = "is required")
     private String coachNo;
+    @NotBlank(message = "is required")
     private String classCode;
 
     public TrainCoach() {}
 
-    public TrainCoach(Integer trainNo, String coachNo, String classCode) {
+    public TrainCoach(String trainNo, String coachNo, String classCode) {
         this.trainNo = trainNo;
         this.coachNo = coachNo;
         this.classCode = classCode;
     }
 
-    public Integer getTrainNo() { return trainNo; }
-    public void setTrainNo(Integer trainNo) { this.trainNo = trainNo; }
+    public String getTrainNo() { return trainNo; }
+    public void setTrainNo(String trainNo) { this.trainNo = trainNo; }
     public String getCoachNo() { return coachNo; }
     public void setCoachNo(String coachNo) { this.coachNo = coachNo; }
     public String getClassCode() { return classCode; }

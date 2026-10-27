@@ -2,6 +2,7 @@ package com.railway.train.controller;
 
 import java.util.List;
 
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -10,8 +11,7 @@ import com.railway.train.model.Train;
 import com.railway.train.service.TrainService;
 
 @RestController
-@RequestMapping({"/api/trains", "/trains"})
-@CrossOrigin(origins = "*")
+@RequestMapping("/api/trains")
 public class TrainController {
 
     @Autowired
@@ -23,20 +23,20 @@ public class TrainController {
     }
 
     @GetMapping("/{trainNo}")
-    public ResponseEntity<Train> getTrainByNo(@PathVariable Integer trainNo) {
+    public ResponseEntity<Train> getTrainByNo(@PathVariable String trainNo) {
         return trainService.getTrainByNo(trainNo)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
     @PostMapping
-    public ResponseEntity<String> addTrain(@RequestBody Train train) {
+    public ResponseEntity<String> addTrain(@Valid @RequestBody Train train) {
         trainService.addTrain(train);
         return ResponseEntity.ok("Train added or updated successfully");
     }
 
     @DeleteMapping("/{trainNo}")
-    public ResponseEntity<Void> deleteTrain(@PathVariable Integer trainNo) {
+    public ResponseEntity<Void> deleteTrain(@PathVariable String trainNo) {
         if (trainService.removeTrain(trainNo)) {
             return ResponseEntity.noContent().build();
         }

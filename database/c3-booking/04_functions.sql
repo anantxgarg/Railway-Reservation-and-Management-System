@@ -40,19 +40,8 @@ COMMENT ON FUNCTION generate_pnr() IS 'Next PNR: 9-digit sequence number + Luhn 
 COMMENT ON FUNCTION is_valid_pnr(TEXT) IS 'True if the text is 10 digits with a correct check digit';
 
 -- ---------------------------------------------------------------------
--- Route of a run: train_schedule row for (train_no, weekday of run_date)
+-- Route lookups (route_of_run is C2's, database/c2-network/functions.sql)
 -- ---------------------------------------------------------------------
-CREATE FUNCTION route_of_run(p_run_id INTEGER) RETURNS INTEGER
-LANGUAGE sql STABLE AS $$
-    SELECT s.route_id
-    FROM train_run r
-    JOIN train_schedule s ON s.train_no = r.train_no
-                         AND s.run_day = to_char(r.run_date, 'FMDay')
-    WHERE r.run_id = p_run_id
-$$;
-
-COMMENT ON FUNCTION route_of_run(INTEGER) IS 'Route a dated run follows (derived from train_schedule by weekday)';
-
 -- Calendar date on which the run reaches a stop (run_date + day_offset)
 CREATE FUNCTION journey_date(p_run_id INTEGER, p_stop_seq INTEGER) RETURNS DATE
 LANGUAGE sql STABLE AS $$

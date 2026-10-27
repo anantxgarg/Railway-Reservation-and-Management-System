@@ -100,8 +100,9 @@ BEGIN
     SELECT * INTO v_run FROM train_run WHERE run_id = p_run_id;
     IF NOT FOUND THEN
         RAISE EXCEPTION 'train run % not found', p_run_id USING ERRCODE = 'no_data_found';
-    ELSIF v_run.status = 'CANCELLED' THEN
-        RAISE EXCEPTION 'train run % is cancelled', p_run_id USING ERRCODE = 'object_not_in_prerequisite_state';
+    ELSIF v_run.status IN ('CANCELLED', 'ARRIVED') THEN
+        -- run status is Team 2's (train-service); DEPARTED still takes bookings for later stops
+        RAISE EXCEPTION 'train run % is %', p_run_id, lower(v_run.status) USING ERRCODE = 'object_not_in_prerequisite_state';
     END IF;
     IF journey_date(p_run_id, p_from_seq) < CURRENT_DATE THEN
         RAISE EXCEPTION 'the train has already left stop %', p_from_seq USING ERRCODE = 'object_not_in_prerequisite_state';

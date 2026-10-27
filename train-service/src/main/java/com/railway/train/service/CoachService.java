@@ -19,11 +19,11 @@ public class CoachService {
         return coachRepository.findAll();
     }
 
-    public List<TrainCoach> getCoachesByTrainNo(Integer trainNo) {
+    public List<TrainCoach> getCoachesByTrainNo(String trainNo) {
         return coachRepository.findByTrainNo(trainNo);
     }
 
-    public Optional<TrainCoach> getCoach(Integer trainNo, String coachNo) {
+    public Optional<TrainCoach> getCoach(String trainNo, String coachNo) {
         return coachRepository.findByTrainNoAndCoachNo(trainNo, coachNo);
     }
 
@@ -31,7 +31,7 @@ public class CoachService {
         coachRepository.save(coach);
     }
 
-    public boolean deleteCoach(Integer trainNo, String coachNo) {
+    public boolean deleteCoach(String trainNo, String coachNo) {
         return coachRepository.deleteByTrainNoAndCoachNo(trainNo, coachNo);
     }
 }

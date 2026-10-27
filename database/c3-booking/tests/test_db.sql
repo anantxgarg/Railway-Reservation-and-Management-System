@@ -39,7 +39,7 @@ BEGIN
 END $$;
 
 -- ------------------------------------------------------------- structure
-SELECT pg_temp.expect('structure: all 14 C3 tables exist',
+SELECT pg_temp.expect('structure: all 14 C2 + C3 tables exist',
     (SELECT count(*) FROM pg_tables WHERE schemaname = 'public' AND tablename IN (
         'station','train','travel_class','route','route_station','train_schedule',
         'train_run','train_coach','seat','quota','concession_rule',
@@ -52,29 +52,14 @@ SELECT pg_temp.expect('structure: booking.user_id references C1 users',
             AND confrelid = 'users'::regclass));
 
 -- ------------------------------------------------------------- seed data
-SELECT pg_temp.expect('seed: 5 travel classes', (SELECT count(*) FROM travel_class) = 5);
 SELECT pg_temp.expect('seed: 4 quotas',         (SELECT count(*) FROM quota) = 4);
-SELECT pg_temp.expect('seed: 3 trains, 3 routes',
-    (SELECT count(*) FROM train) = 3 AND (SELECT count(*) FROM route) = 3);
-SELECT pg_temp.expect('seed: every train has a schedule for all 7 weekdays',
-    NOT EXISTS (SELECT 1 FROM train t
-                WHERE (SELECT count(*) FROM train_schedule s WHERE s.train_no = t.train_no) <> 7));
-SELECT pg_temp.expect('seed: 30 runs per train starting today',
-    NOT EXISTS (SELECT 1 FROM train t
+-- The network seed (classes, trains, runs, seats) is C2's and tested in
+-- database/c2-network/tests. These tests book on the Rajdhani (12952),
+-- the Tamil Nadu Express (12622) and the Intercity (12127).
+SELECT pg_temp.expect('seed: the trains used here run daily for the next 30 days',
+    NOT EXISTS (SELECT 1 FROM (VALUES ('12952'), ('12622'), ('12127')) t(train_no)
                 WHERE (SELECT count(*) FROM train_run r
                        WHERE r.train_no = t.train_no AND r.run_date >= CURRENT_DATE) <> 30));
-SELECT pg_temp.expect('seed: every coach has seats_per_coach seats',
-    NOT EXISTS (SELECT 1 FROM train_coach tc JOIN travel_class c USING (class_code)
-                WHERE (SELECT count(*) FROM seat s
-                       WHERE s.train_no = tc.train_no AND s.coach_no = tc.coach_no) <> c.seats_per_coach));
-SELECT pg_temp.expect('seed: every seat has a berth type',
-    NOT EXISTS (SELECT 1 FROM seat WHERE berth_type IS NULL));
-SELECT pg_temp.expect('seed: route stops are numbered 1..n with increasing distance',
-    NOT EXISTS (SELECT 1 FROM (
-        SELECT stop_seq, row_number() OVER w AS rn,
-               distance_km, lag(distance_km) OVER w AS prev_km
-        FROM route_station WINDOW w AS (PARTITION BY route_id ORDER BY stop_seq)) x
-        WHERE stop_seq <> rn OR distance_km <= prev_km));
 
 -- ---------------------------------------------------- fixtures for writes
 -- One booking on the first Rajdhani run, NDLS (1) -> BCT (4), for customer@example.com
@@ -216,6 +201,12 @@ SELECT pg_temp.expect_error('create_booking: backwards journey rejected',
 SELECT pg_temp.expect_error('create_booking: class the train does not have rejected',
     format('SELECT create_booking(%s, %s, %L, %L, 1, 4, %L)', :uid, :raj5, 'SL', 'GN', pg_temp.pax(1)),
     '23514', 'trg_booking_class_on_train');
+UPDATE train_run SET status = 'ARRIVED' WHERE train_no = '12952' AND run_date = CURRENT_DATE + 25;
+SELECT pg_temp.expect_error('create_booking: run marked ARRIVED (train-service) takes no bookings',
+    format('SELECT create_booking(%s, %s, %L, %L, 1, 4, %L)', :uid,
+           (SELECT run_id FROM train_run WHERE train_no = '12952' AND run_date = CURRENT_DATE + 25),
+           '3A', 'GN', pg_temp.pax(1)),
+    '55000');
 SELECT pg_temp.expect_error('create_booking: invalid passenger (age 0) rejected',
     format('SELECT create_booking(%s, %s, %L, %L, 1, 4, %L)', :uid, :raj5, '3A', 'GN',
            '[{"name":"Baby","age":0,"gender":"F"}]'), '23514', 'chk_passenger_age');

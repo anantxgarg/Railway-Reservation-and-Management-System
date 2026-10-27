@@ -2,6 +2,7 @@ package com.railway.train.controller;
 
 import java.util.List;
 
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -11,7 +12,6 @@ import com.railway.train.service.TravelClassService;
 
 @RestController
 @RequestMapping("/api/travel-classes")
-@CrossOrigin(origins = "*")
 public class TravelClassController {
 
     @Autowired
@@ -30,7 +30,7 @@ public class TravelClassController {
     }
 
     @PostMapping
-    public ResponseEntity<String> saveClass(@RequestBody TravelClass travelClass) {
+    public ResponseEntity<String> saveClass(@Valid @RequestBody TravelClass travelClass) {
         travelClassService.saveClass(travelClass);
         return ResponseEntity.ok("Travel class saved successfully");
     }

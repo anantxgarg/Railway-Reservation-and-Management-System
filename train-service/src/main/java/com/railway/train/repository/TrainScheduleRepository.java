@@ -17,32 +17,30 @@ public class TrainScheduleRepository {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
-    private final RowMapper<TrainSchedule> rowMapper = (rs, rowNum) -> {
-        TrainSchedule schedule = new TrainSchedule();
-        schedule.setTrainNo(rs.getInt("train_no"));
-        schedule.setRunDay(rs.getString("run_day"));
-        return schedule;
-    };
+    // Monday first, as in a timetable
+    private static final String ORDER = " ORDER BY train_no, array_position(ARRAY['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']::VARCHAR[], run_day)";
+
+    private final RowMapper<TrainSchedule> rowMapper = (rs, rowNum) -> new TrainSchedule(
+            rs.getString("train_no"),
+            rs.getString("run_day"),
+            rs.getInt("route_id"));
 
     public List<TrainSchedule> findAll() {
-        return jdbcTemplate.query(
-                "SELECT train_no, run_day FROM train_schedule ORDER BY train_no, run_day",
-                rowMapper
-        );
+        return jdbcTemplate.query("SELECT train_no, run_day, route_id FROM train_schedule" + ORDER, rowMapper);
     }
 
-    public List<TrainSchedule> findByTrainNo(Integer trainNo) {
+    public List<TrainSchedule> findByTrainNo(String trainNo) {
         return jdbcTemplate.query(
-                "SELECT train_no, run_day FROM train_schedule WHERE train_no = ?",
+                "SELECT train_no, run_day, route_id FROM train_schedule WHERE train_no = ?" + ORDER,
                 rowMapper,
                 trainNo
         );
     }
 
-    public Optional<TrainSchedule> findByTrainNoAndDay(Integer trainNo, String runDay) {
+    public Optional<TrainSchedule> findByTrainNoAndDay(String trainNo, String runDay) {
         try {
             TrainSchedule schedule = jdbcTemplate.queryForObject(
-                    "SELECT train_no, run_day FROM train_schedule WHERE train_no = ? AND run_day = ?",
+                    "SELECT train_no, run_day, route_id FROM train_schedule WHERE train_no = ? AND run_day = ?",
                     rowMapper,
                     trainNo,
                     runDay
@@ -54,17 +52,18 @@ public class TrainScheduleRepository {
     }
 
     public void save(TrainSchedule schedule) {
-        String sql = "INSERT INTO train_schedule (train_no, run_day) " +
-                     "VALUES (?, ?) " +
-                     "ON CONFLICT (train_no, run_day) DO NOTHING";
+        String sql = "INSERT INTO train_schedule (train_no, run_day, route_id) " +
+                     "VALUES (?, ?, ?) " +
+                     "ON CONFLICT (train_no, run_day) DO UPDATE SET route_id = EXCLUDED.route_id";
         jdbcTemplate.update(
                 sql,
                 schedule.getTrainNo(),
-                schedule.getRunDay()
+                schedule.getRunDay(),
+                schedule.getRouteId()
         );
     }
 
-    public boolean deleteByTrainNoAndDay(Integer trainNo, String runDay) {
+    public boolean deleteByTrainNoAndDay(String trainNo, String runDay) {
         return jdbcTemplate.update("DELETE FROM train_schedule WHERE train_no = ? AND run_day = ?", trainNo, runDay) > 0;
     }
 }

@@ -6,7 +6,7 @@
 
 Project railway_c3 {
   database_type: 'PostgreSQL'
-  Note: 'Team 3 owns quota, booking, passenger and seat_allocation. The network tables are placeholders for Team 2, concession_rule for Team 4.'
+  Note: 'Team 3 owns quota, booking, passenger, seat_allocation and notification_outbox. The network tables are Team 2\'s (database/c2-network/c2_network.dbml); concession_rule is a placeholder for Team 4.'
 }
 
 enum booking_status_enum {
@@ -28,12 +28,6 @@ enum quota_name_enum {
   Tatkal
   Ladies
   Senior
-}
-
-enum train_type_enum {
-  Express
-  Slow
-  "High-Speed"
 }
 
 // ---------------------------------------------------------------- C1 (Team 1)
@@ -137,107 +131,40 @@ Table concession_rule {
   Note: 'Placeholder for Team 4; used by calc_fare.'
 }
 
-// ---------------------------------------------- Network (Team 2 placeholder)
+// ------------------------------------------ Network (Team 2, database/c2-network)
 
-Table station {
-  station_code varchar(10) [pk, note: 'NDLS, BCT, MAS, ...']
-  station_name varchar(200) [not null]
-  city varchar(100) [not null]
-  state varchar(100) [not null]
-  zone varchar(50)
-  num_platforms int [note: 'CHECK > 0 when set']
-  created_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
-}
-
-Table train {
-  train_no varchar(10) [pk]
-  train_name varchar(200) [not null]
-  train_type train_type_enum [not null, default: 'Express']
-  is_active boolean [not null, default: true]
-  created_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
+Table train_run {
+  run_id int [pk]
+  Note: 'Owned by Team 2. Only the key is shown here; see c2_network.dbml.'
 }
 
 Table travel_class {
-  class_code varchar(10) [pk, note: '1A, 2A, 3A, SL, 2S']
-  class_name varchar(100) [not null]
-  is_ac boolean [not null, default: false]
-  seats_per_coach int [not null, note: 'CHECK > 0']
-  base_fare_per_km numeric(10,2) [not null, note: 'CHECK > 0']
-  reservation_charge numeric(10,2) [not null, default: 0, note: 'per passenger; CHECK >= 0']
-  created_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
-}
-
-Table route {
-  route_id int [pk, increment]
-  route_code varchar(20) [not null, unique]
-  route_name varchar(200) [not null]
-  created_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
-}
-
-Table route_station {
-  route_id int [not null, ref: > route.route_id, note: 'ON DELETE CASCADE']
-  stop_seq int [not null, note: '1, 2, 3, ...; booking.from_seq/to_seq refer to it']
-  station_code varchar(10) [not null, ref: > station.station_code]
-  distance_km numeric(10,2) [not null, note: 'from the origin']
-  arrival_offset int [note: 'minutes after leaving the origin; NULL at the origin']
-  departure_offset int [not null, note: 'minutes after leaving the origin']
-  day_offset int [not null, default: 0, note: 'days after the run date']
-  default_platform varchar(10)
-
-  indexes {
-    (route_id, stop_seq) [pk]
-    station_code [name: 'idx_route_station_station_code']
-  }
-  Note: 'Offsets are relative to the departure from the origin, whose clock time is not stored yet.'
-}
-
-Table train_schedule {
-  train_no varchar(10) [not null, ref: > train.train_no, note: 'ON DELETE CASCADE']
-  run_day varchar(10) [not null, note: 'Monday .. Sunday']
-  route_id int [not null, ref: > route.route_id]
-  created_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
-
-  indexes {
-    (train_no, run_day) [pk]
-  }
-}
-
-Table train_run {
-  run_id int [pk, increment]
-  train_no varchar(10) [not null, ref: > train.train_no]
-  run_date date [not null, note: 'date the train leaves its origin']
-  status varchar(50) [note: 'SCHEDULED, CANCELLED, ...']
-  created_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
-
-  indexes {
-    (train_no, run_date) [unique, name: 'uq_train_run_train_date']
-    run_date [name: 'idx_train_run_date']
-  }
-  Note: 'The route comes from train_schedule for the weekday of run_date (view v_run_route).'
-}
-
-Table train_coach {
-  train_no varchar(10) [not null, ref: > train.train_no, note: 'ON DELETE CASCADE']
-  coach_no varchar(10) [not null, note: 'B1, S3, ...']
-  class_code varchar(10) [not null, ref: > travel_class.class_code]
-  created_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
-
-  indexes {
-    (train_no, coach_no) [pk]
-  }
+  class_code varchar(10) [pk]
+  Note: 'Owned by Team 2.'
 }
 
 Table seat {
-  seat_id int [pk, increment]
-  train_no varchar(10) [not null]
-  coach_no varchar(10) [not null]
-  berth_no varchar(10) [not null]
-  berth_type varchar(50) [note: 'LB/MB/UB/SL/SU, or WS/MS/AS for sitting classes']
-  created_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
-
-  indexes {
-    (train_no, coach_no, berth_no) [unique, name: 'uq_seat_train_coach_berth']
-  }
+  seat_id int [pk]
+  Note: 'Owned by Team 2.'
 }
 
-Ref fk_seat_coach: seat.(train_no, coach_no) > train_coach.(train_no, coach_no) [delete: cascade]
+// ------------------------------------------- Notifications for Team 6
+
+Table notification_outbox {
+  event_id bigint [pk, increment]
+  type varchar(30) [not null, note: 'one of Team 6\'s 7 notification types (chk_outbox_type)']
+  user_id int [not null, note: 'C1 users.user_id of the booking\'s owner']
+  pnr varchar(10) [not null, ref: > booking.pnr, note: 'ON DELETE CASCADE']
+  source_team varchar(30) [not null, note: 'team-2, team-3 or team-4']
+  data jsonb [not null, note: 'the "data" object Team 6 expects for the type']
+  event_time timestamptz [not null, default: `clock_timestamp()`]
+  attempts int [not null, default: 0]
+  last_error text
+  sent_at timestamptz [note: 'when Team 6 accepted it; NULL while waiting']
+
+  indexes {
+    event_id [name: 'idx_outbox_unsent', note: 'partial: WHERE sent_at IS NULL']
+    (pnr, type) [unique, name: 'uq_outbox_once_per_booking', note: 'partial: JOURNEY_REMINDER, JOURNEY_COMPLETED']
+  }
+  Note: 'Written in the same transaction as the change it describes; booking-service delivers it to notification-service.'
+}

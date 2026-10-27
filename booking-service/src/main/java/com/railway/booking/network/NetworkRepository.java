@@ -3,6 +3,7 @@ package com.railway.booking.network;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -18,7 +19,7 @@ import org.springframework.stereotype.Repository;
 
 /**
  * Reads trains, routes and availability. The network tables are Team 2's
- * (a placeholder for now); availability comes from the C3 availability()
+ * (database/c2-network); availability comes from the C3 availability()
  * function, so it matches what create_booking will do.
  */
 @Repository
@@ -29,8 +30,11 @@ public class NetworkRepository {
             FROM v_run_route WHERE run_id = ?""";
 
     private static final String STOPS_SQL = """
-            SELECT rs.stop_seq, rs.station_code, s.station_name, rr.run_date + rs.day_offset AS stop_date
+            SELECT rs.stop_seq, rs.station_code, s.station_name, rr.run_date + rs.day_offset AS stop_date,
+                   (rt.departure_time + make_interval(mins => rs.arrival_offset))::TIME AS arrival_time,
+                   (rt.departure_time + make_interval(mins => rs.departure_offset))::TIME AS departure_time
             FROM v_run_route rr
+            JOIN route rt ON rt.route_id = rr.route_id
             JOIN route_station rs ON rs.route_id = rr.route_id
             JOIN station s ON s.station_code = rs.station_code
             WHERE rr.run_id = ?
@@ -57,10 +61,13 @@ public class NetworkRepository {
                 SELECT rr.run_id, rr.train_no, rr.train_name, rr.run_date,
                        f.stop_seq AS from_seq, f.station_code AS from_code, fst.station_name AS from_name,
                        rr.run_date + f.day_offset AS from_date,
+                       (rt.departure_time + make_interval(mins => f.departure_offset))::TIME AS from_time,
                        t.stop_seq AS to_seq, t.station_code AS to_code, tst.station_name AS to_name,
                        rr.run_date + t.day_offset AS to_date,
+                       (rt.departure_time + make_interval(mins => t.arrival_offset))::TIME AS to_time,
                        t.distance_km - f.distance_km AS distance_km
                 FROM v_run_route rr
+                JOIN route rt ON rt.route_id = rr.route_id
                 JOIN route_station f ON f.route_id = rr.route_id AND f.station_code = ?
                 JOIN route_station t ON t.route_id = rr.route_id AND t.station_code = ? AND t.stop_seq > f.stop_seq
                 JOIN station fst ON fst.station_code = f.station_code
@@ -95,7 +102,8 @@ public class NetworkRepository {
     /** The stops of a run's route in order; empty if the run has no route. */
     public List<Stop> stopsOfRun(int runId) {
         return jdbc.query(STOPS_SQL, (rs, i) -> new Stop(rs.getInt("stop_seq"), rs.getString("station_code"),
-                rs.getString("station_name"), rs.getObject("stop_date", LocalDate.class)), runId);
+                rs.getString("station_name"), rs.getObject("stop_date", LocalDate.class),
+                rs.getObject("arrival_time", LocalTime.class), rs.getObject("departure_time", LocalTime.class)), runId);
     }
 
     /** Availability per class between two stops; classCode null means every class on the train. */
@@ -114,9 +122,11 @@ public class NetworkRepository {
                 result = new SearchResult(runId, rs.getString("train_no"), rs.getString("train_name"),
                         rs.getObject("run_date", LocalDate.class),
                         new Stop(rs.getInt("from_seq"), rs.getString("from_code"), rs.getString("from_name"),
-                                rs.getObject("from_date", LocalDate.class)),
+                                rs.getObject("from_date", LocalDate.class), null,
+                                rs.getObject("from_time", LocalTime.class)),
                         new Stop(rs.getInt("to_seq"), rs.getString("to_code"), rs.getString("to_name"),
-                                rs.getObject("to_date", LocalDate.class)),
+                                rs.getObject("to_date", LocalDate.class),
+                                rs.getObject("to_time", LocalTime.class), null),
                         rs.getBigDecimal("distance_km"), new ArrayList<>());
                 results.put(runId, result);
             }

@@ -2,7 +2,7 @@
 
 Every table, column and rule created by the SQL files in this folder, as built by `database/setup.sh`. The diagram is [`c3_booking.dbml`](c3_booking.dbml) (paste it into dbdiagram.io).
 
-- **Owner** says which team is responsible. Team 3 owns `quota`, `booking`, `passenger` and `seat_allocation`. The network tables are placeholders for Team 2 and `concession_rule` for Team 4, until those teams take them over.
+- **Owner** says which team is responsible. Team 3 owns `quota`, `booking`, `passenger`, `seat_allocation` and `notification_outbox`. `concession_rule` is a placeholder for Team 4. The network tables are Team 2's ([C2 data dictionary](../c2-network/DATA_DICTIONARY.md)).
 - **Rule names** (`chk_*`, `trg_*`, `excl_*`) are what the database reports when it refuses a change, and the booking API returns them in `error.constraint`. For triggers, see the "Reported as" column under [Cross-row rules](#cross-row-rules).
 - All timestamps are `TIMESTAMPTZ`. All money is `NUMERIC(10,2)` in rupees.
 
@@ -12,7 +12,8 @@ Every table, column and rule created by the SQL files in this folder, as built b
 - [Booking tables (Team 3)](#booking-tables-team-3): `quota`, `booking`, `passenger`, `seat_allocation`
 - [Cross-row rules](#cross-row-rules)
 - [Concessions (placeholder, Team 4)](#concessions-placeholder-team-4): `concession_rule`
-- [Network (placeholder, Team 2)](#network-placeholder-team-2): `station`, `train`, `travel_class`, `route`, `route_station`, `train_schedule`, `train_run`, `train_coach`, `seat`
+- [Network (Team 2)](#network-team-2): moved to `database/c2-network`
+- [Notifications for Team 6](#notifications-for-team-6): `notification_outbox`
 - [Views](#views)
 - [Functions and procedures](#functions-and-procedures)
 - [Tables of other teams that reference bookings](#tables-of-other-teams-that-reference-bookings)
@@ -24,7 +25,6 @@ Every table, column and rule created by the SQL files in this folder, as built b
 | `booking_status_enum` | `HELD`, `CONFIRMED`, `CANCELLED`, `EXPIRED` | `HELD`: created, waiting for payment, berths held until `hold_expires_at`. `CONFIRMED`: paid. `CANCELLED`: every passenger cancelled. `EXPIRED`: hold lapsed unpaid. |
 | `passenger_status_enum` | `CONFIRMED`, `RAC`, `WAITLIST`, `CANCELLED` | `CONFIRMED`: has a berth (`seat_allocation` row). `RAC`: shares a side-lower berth, no row. `WAITLIST`: queued, no berth. `CANCELLED`: removed from the booking. |
 | `quota_name_enum` | `General`, `Tatkal`, `Ladies`, `Senior` | Names for `quota.quota_name`. |
-| `train_type_enum` | `Express`, `Slow`, `High-Speed` | Placeholder (Team 2). |
 
 **Status changes allowed:**
 - Booking: `HELD` → `CONFIRMED` | `CANCELLED` | `EXPIRED`, and `CONFIRMED` → `CANCELLED`.
@@ -161,83 +161,38 @@ Discounts per passenger, applied by `calc_fare` at booking. File `02_quota_conce
 
 Team 4's payments app keeps its own concession percentages and staff-verified applications (`concession_applications`). The two need to become one; see the root README.
 
-## Network (placeholder, Team 2)
+## Network (Team 2)
 
-File `01_network_placeholder.sql`. These are kept only so bookings have trains to point at, and Team 2 should take them over. Every `created_at` is `TIMESTAMPTZ NOT NULL DEFAULT now()` and is left out below.
+The network tables (`station`, `train`, `travel_class`, `route`, `route_station`, `train_schedule`, `train_run`, `train_coach`, `seat`) started here as a placeholder and are now Team 2's: see [`database/c2-network/DATA_DICTIONARY.md`](../c2-network/DATA_DICTIONARY.md). Booking uses `route_of_run()` and `stop_departure_at()` from there.
 
-### `station`
+## Notifications for Team 6
 
-| Column | Type | Null | Description |
-|---|---|---|---|
-| `station_code` | `VARCHAR(10)` | no | **PK.** `NDLS`, `BCT`, `MAS`, ... |
-| `station_name` | `VARCHAR(200)` | no | |
-| `city`, `state` | `VARCHAR(100)` | no | |
-| `zone` | `VARCHAR(50)` | yes | Railway zone, e.g. Northern |
-| `num_platforms` | `INTEGER` | yes | `chk_station_num_platforms`: > 0 when set |
+File `08_notifications.sql`. A transactional outbox: rows are written in the same transaction as the change they describe, and booking-service delivers them to Team 6's notification-service (`POST /api/notifications`), retrying while it is down.
 
-### `train`
+### `notification_outbox`
 
 | Column | Type | Null | Default | Description |
 |---|---|---|---|---|
-| `train_no` | `VARCHAR(10)` | no | | **PK** |
-| `train_name` | `VARCHAR(200)` | no | | |
-| `train_type` | `train_type_enum` | no | `Express` | |
-| `is_active` | `BOOLEAN` | no | `true` | |
+| `event_id` | `BIGSERIAL` | no | | **PK**. Delivery order |
+| `type` | `VARCHAR(30)` | no | | One of Team 6's types (`chk_outbox_type`): `BOOKING_CONFIRMED`, `BOOKING_CANCELLED`, `PAYMENT_CONFIRMED`, `JOURNEY_REMINDER`, `WL_TO_RAC`, `RAC_TO_CNF`, `JOURNEY_COMPLETED` |
+| `user_id` | `INTEGER` | no | | Owner of the booking (C1 `users.user_id`) |
+| `pnr` | `VARCHAR(10)` | no | | **FK** `booking`, `ON DELETE CASCADE` |
+| `source_team` | `VARCHAR(30)` | no | | `team-2`, `team-3` or `team-4` |
+| `data` | `JSONB` | no | | The `data` object Team 6 expects for the type |
+| `event_time` | `TIMESTAMPTZ` | no | `clock_timestamp()` | |
+| `attempts`, `last_error` | `INTEGER`, `TEXT` | no, yes | `0` | Failed deliveries so far |
+| `sent_at` | `TIMESTAMPTZ` | yes | | When Team 6 accepted it |
 
-### `travel_class`
+Indexes: `idx_outbox_unsent` (partial, unsent rows); `uq_outbox_once_per_booking` on (`pnr`, `type`) for `JOURNEY_REMINDER` and `JOURNEY_COMPLETED`, so each is sent once per booking.
 
-| Column | Type | Null | Default | Description |
-|---|---|---|---|---|
-| `class_code` | `VARCHAR(10)` | no | | **PK.** `1A`, `2A`, `3A`, `SL`, `2S` |
-| `class_name` | `VARCHAR(100)` | no | | |
-| `is_ac` | `BOOLEAN` | no | `false` | |
-| `seats_per_coach` | `INTEGER` | no | | `chk_travel_class_seats`: > 0 |
-| `base_fare_per_km` | `NUMERIC(10,2)` | no | | `chk_travel_class_base_fare`: > 0 |
-| `reservation_charge` | `NUMERIC(10,2)` | no | `0` | Per passenger. `chk_travel_class_reservation_charge`: >= 0 |
-
-### `route` and `route_station`
-
-| Table | Column | Type | Null | Description |
-|---|---|---|---|---|
-| `route` | `route_id` | `SERIAL` | no | **PK** |
-| | `route_code` | `VARCHAR(20)` | no | Unique, e.g. `NDLS-BCT` |
-| | `route_name` | `VARCHAR(200)` | no | |
-| `route_station` | `route_id` | `INTEGER` | no | **PK** part. **FK** `route`, `ON DELETE CASCADE` |
-| | `stop_seq` | `INTEGER` | no | **PK** part. 1, 2, 3, ... (`chk_route_station_stop_seq`: > 0). `booking.from_seq`/`to_seq` refer to it |
-| | `station_code` | `VARCHAR(10)` | no | **FK** `station`. Index `idx_route_station_station_code` |
-| | `distance_km` | `NUMERIC(10,2)` | no | From the origin, >= 0 |
-| | `arrival_offset` | `INTEGER` | yes | Minutes after leaving the origin; `NULL` at the origin |
-| | `departure_offset` | `INTEGER` | no | Minutes after leaving the origin, >= 0 |
-| | `day_offset` | `INTEGER` | no | Days after the run date (default 0), >= 0 |
-| | `default_platform` | `VARCHAR(10)` | yes | |
-
-The offsets are relative to the train leaving its origin, but **that departure time is not stored anywhere yet**. Screens show dates only, and Team 4's refund windows treat departure as 00:00 IST on the travel day.
-
-### `train_schedule`, `train_run`
-
-| Table | Column | Type | Null | Description |
-|---|---|---|---|---|
-| `train_schedule` | `train_no` | `VARCHAR(10)` | no | **PK** part. **FK** `train`, `ON DELETE CASCADE` |
-| | `run_day` | `VARCHAR(10)` | no | **PK** part. `Monday` .. `Sunday` (`chk_train_schedule_run_day`) |
-| | `route_id` | `INTEGER` | no | **FK** `route`. Index `idx_train_schedule_route_id` |
-| `train_run` | `run_id` | `SERIAL` | no | **PK** |
-| | `train_no` | `VARCHAR(10)` | no | **FK** `train` |
-| | `run_date` | `DATE` | no | Date the train leaves its origin. Unique with `train_no` (`uq_train_run_train_date`); index `idx_train_run_date` |
-| | `status` | `VARCHAR(50)` | yes | `SCHEDULED`, `CANCELLED`, ... (no fixed list yet). Bookings are refused for a cancelled run |
-
-A run's route is the schedule's route for the weekday of `run_date` (view `v_run_route`).
-
-### `train_coach`, `seat`
-
-| Table | Column | Type | Null | Description |
-|---|---|---|---|---|
-| `train_coach` | `train_no` | `VARCHAR(10)` | no | **PK** part. **FK** `train`, `ON DELETE CASCADE` |
-| | `coach_no` | `VARCHAR(10)` | no | **PK** part. `B1`, `S3`, ... |
-| | `class_code` | `VARCHAR(10)` | no | **FK** `travel_class`. Index `idx_train_coach_class_code` |
-| `seat` | `seat_id` | `SERIAL` | no | **PK** |
-| | `train_no`, `coach_no` | `VARCHAR(10)` | no | **FK** `train_coach` (`fk_seat_coach`, `ON DELETE CASCADE`) |
-| | `berth_no` | `VARCHAR(10)` | no | Unique within the coach (`uq_seat_train_coach_berth`) |
-| | `berth_type` | `VARCHAR(50)` | yes | `LB`/`MB`/`UB`/`SL`/`SU` for sleeper classes, `WS`/`MS`/`AS` for sitting |
+| Event | Written by |
+|---|---|
+| `BOOKING_CONFIRMED` | trigger `trg_notify_booking_confirmed`, when a booking goes `HELD` → `CONFIRMED` (paid) |
+| `WL_TO_RAC`, `RAC_TO_CNF` | constraint trigger `trg_notify_passenger_promoted` (at `COMMIT`), when a passenger of an existing booking moves up the queue |
+| `BOOKING_CANCELLED` | booking-service (unpaid bookings) and payments (with the refund), via `queue_notification()` |
+| `PAYMENT_CONFIRMED` | payments, via `queue_notification()` |
+| `JOURNEY_REMINDER` | booking-service's job, via `queue_journey_reminders(interval)` |
+| `JOURNEY_COMPLETED` | train-service when staff mark a run `ARRIVED`, via `queue_journey_completed(run_id)` |
 
 ## Views
 
@@ -264,6 +219,8 @@ Files `04_functions.sql` and `06_procedures.sql`; how to call them is in the [RE
 | `cancel_passengers(pnr, ids)` | function | Cancels the listed passengers (or all), frees berths, promotes the queue; returns each cancelled passenger's fare |
 | `promote_queue(run, class)` | procedure | Gives freed berths to RAC first, then the waitlist, by queue number |
 | `expire_holds()` | procedure | Unpaid holds past expiry → `EXPIRED`; the booking service runs it every minute |
+| `queue_notification(type, pnr, source_team, data)` | function | Adds one event for Team 6 for the PNR's owner (file `08_notifications.sql`) |
+| `queue_journey_reminders(within)`, `queue_journey_completed(run)` | function | Queue `JOURNEY_REMINDER` / `JOURNEY_COMPLETED` for paid bookings, once each; return how many |
 
 ## Tables of other teams that reference bookings
 

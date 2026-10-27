@@ -2,6 +2,7 @@ package com.railway.train.controller;
 
 import java.util.List;
 
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -11,7 +12,6 @@ import com.railway.train.service.StationService;
 
 @RestController
 @RequestMapping("/api/stations")
-@CrossOrigin(origins = "*")
 public class StationController {
 
     @Autowired
@@ -30,7 +30,7 @@ public class StationController {
     }
 
     @PostMapping
-    public ResponseEntity<String> saveStation(@RequestBody Station station) {
+    public ResponseEntity<String> saveStation(@Valid @RequestBody Station station) {
         stationService.saveStation(station);
         return ResponseEntity.ok("Station saved successfully");
     }

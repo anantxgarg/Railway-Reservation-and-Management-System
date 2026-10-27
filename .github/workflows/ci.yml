@@ -47,8 +47,8 @@ jobs:
           PGDATABASE=railway_test ../database/setup.sh --reset
           npm run test:db
 
-  booking-and-payments:
-    name: Team 3 booking and Team 4 payments
+  network-booking-and-payments:
+    name: Team 2 network, Team 3 booking and Team 4 payments
     runs-on: ubuntu-24.04
     services:
       postgres:
@@ -68,6 +68,11 @@ jobs:
           cache-dependency-path: |
             pom.xml
             booking-service/pom.xml
+            train-service/pom.xml
+      - name: C2 network database tests
+        run: ./database/c2-network/tests/run_tests.sh
+      - name: Train service API tests
+        run: ./train-service/run_tests.sh
       - name: C3 database tests
         run: ./database/c3-booking/tests/run_tests.sh
       - name: Booking API tests

@@ -17,21 +17,24 @@ public class StationRepository {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
-    private final RowMapper<Station> rowMapper = (rs, rowNum) -> {
-        Station station = new Station();
-        station.setStationCode(rs.getString("station_code"));
-        station.setStationName(rs.getString("station_name"));
-        return station;
-    };
+    private static final String COLUMNS = "station_code, station_name, city, state, zone, num_platforms";
+
+    private final RowMapper<Station> rowMapper = (rs, rowNum) -> new Station(
+            rs.getString("station_code"),
+            rs.getString("station_name"),
+            rs.getString("city"),
+            rs.getString("state"),
+            rs.getString("zone"),
+            rs.getObject("num_platforms", Integer.class));
 
     public List<Station> findAll() {
-        return jdbcTemplate.query("SELECT station_code, station_name FROM station ORDER BY station_code", rowMapper);
+        return jdbcTemplate.query("SELECT " + COLUMNS + " FROM station ORDER BY station_code", rowMapper);
     }
 
     public Optional<Station> findByCode(String stationCode) {
         try {
             Station station = jdbcTemplate.queryForObject(
-                    "SELECT station_code, station_name FROM station WHERE station_code = ?",
+                    "SELECT " + COLUMNS + " FROM station WHERE station_code = ?",
                     rowMapper,
                     stationCode
             );
@@ -42,9 +45,11 @@ public class StationRepository {
     }
 
     public void save(Station station) {
-        String sql = "INSERT INTO station (station_code, station_name) VALUES (?, ?) " +
-                     "ON CONFLICT (station_code) DO UPDATE SET station_name = EXCLUDED.station_name";
-        jdbcTemplate.update(sql, station.getStationCode(), station.getStationName());
+        String sql = "INSERT INTO station (station_code, station_name, city, state, zone, num_platforms) VALUES (?, ?, ?, ?, ?, ?) " +
+                     "ON CONFLICT (station_code) DO UPDATE SET station_name = EXCLUDED.station_name, city = EXCLUDED.city, " +
+                     "state = EXCLUDED.state, zone = EXCLUDED.zone, num_platforms = EXCLUDED.num_platforms";
+        jdbcTemplate.update(sql, station.getStationCode(), station.getStationName(), station.getCity(),
+                station.getState(), station.getZone(), station.getNumPlatforms());
     }
 
     public boolean deleteByCode(String stationCode) {

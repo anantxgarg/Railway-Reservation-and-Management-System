@@ -1,0 +1,124 @@
+// C2 Network (Team 2) — as built by schema.sql in this folder.
+// Paste into https://dbdiagram.io/d to view.
+// Booking (database/c3-booking) refers to train_run, travel_class, route_station
+// (from_seq/to_seq) and seat.
+
+Project railway_c2 {
+  database_type: 'PostgreSQL'
+  Note: 'Trains, stations, routes, schedules, runs, coaches and seats. Owned by Team 2.'
+}
+
+enum train_type_enum {
+  Express
+  Slow
+  "High-Speed"
+}
+
+
+Table station {
+  station_code varchar(10) [pk, note: 'NDLS, BCT, MAS, ...']
+  station_name varchar(200) [not null]
+  city varchar(100) [not null]
+  state varchar(100) [not null]
+  zone varchar(50)
+  num_platforms int [note: 'CHECK > 0 when set']
+  created_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
+}
+
+Table train {
+  train_no varchar(10) [pk]
+  train_name varchar(200) [not null]
+  train_type train_type_enum [not null, default: 'Express']
+  is_active boolean [not null, default: true]
+  created_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
+}
+
+Table travel_class {
+  class_code varchar(10) [pk, note: '1A, 2A, 3A, SL, 2S, CC']
+  class_name varchar(100) [not null]
+  is_ac boolean [not null, default: false]
+  seats_per_coach int [not null, note: 'CHECK > 0']
+  base_fare_per_km numeric(10,2) [not null, note: 'CHECK > 0']
+  reservation_charge numeric(10,2) [not null, default: 0, note: 'per passenger; CHECK >= 0']
+  created_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
+}
+
+Table route {
+  route_id int [pk, increment]
+  route_code varchar(20) [not null, unique]
+  route_name varchar(200) [not null]
+  departure_time time [not null, note: 'leaves the first stop (IST); stop offsets count from it']
+  created_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
+}
+
+Table route_station {
+  route_id int [not null, ref: > route.route_id, note: 'ON DELETE CASCADE']
+  stop_seq int [not null, note: '1, 2, 3, ...; booking.from_seq/to_seq refer to it']
+  station_code varchar(10) [not null, ref: > station.station_code]
+  distance_km numeric(10,2) [not null, note: 'from the origin']
+  arrival_offset int [note: 'minutes after leaving the origin; NULL at the origin']
+  departure_offset int [not null, note: 'minutes after leaving the origin']
+  day_offset int [not null, default: 0, note: 'day the stop is reached, counted from the run date; set by trg_validate_route_sequence']
+  default_platform varchar(10)
+
+  indexes {
+    (route_id, stop_seq) [pk]
+    station_code [name: 'idx_route_station_station_code']
+  }
+  Note: '''
+  Offsets are minutes after route.departure_time. trg_validate_route_sequence: each stop farther
+  and no earlier than the previous one, departure not before arrival; it works out day_offset.
+  '''
+}
+
+Table train_schedule {
+  train_no varchar(10) [not null, ref: > train.train_no, note: 'ON DELETE CASCADE']
+  run_day varchar(10) [not null, note: 'Monday .. Sunday']
+  route_id int [not null, ref: > route.route_id]
+  created_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
+
+  indexes {
+    (train_no, run_day) [pk]
+  }
+}
+
+Table train_run {
+  run_id int [pk, increment]
+  train_no varchar(10) [not null, ref: > train.train_no]
+  run_date date [not null, note: 'date the train leaves its origin']
+  status varchar(12) [not null, default: 'SCHEDULED', note: 'SCHEDULED, DEPARTED, DELAYED, CANCELLED, ARRIVED (chk_train_run_status)']
+  delay_minutes int [not null, default: 0, note: 'behind the timetable, for live status; CHECK >= 0']
+  created_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
+
+  indexes {
+    (train_no, run_date) [unique, name: 'uq_train_run_train_date']
+    run_date [name: 'idx_train_run_date']
+  }
+  Note: 'The route comes from train_schedule for the weekday of run_date (view v_run_route).'
+}
+
+Table train_coach {
+  train_no varchar(10) [not null, ref: > train.train_no, note: 'ON DELETE CASCADE']
+  coach_no varchar(10) [not null, note: 'B1, S3, ...']
+  class_code varchar(10) [not null, ref: > travel_class.class_code]
+  created_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
+
+  indexes {
+    (train_no, coach_no) [pk]
+  }
+}
+
+Table seat {
+  seat_id int [pk, increment]
+  train_no varchar(10) [not null]
+  coach_no varchar(10) [not null]
+  berth_no varchar(10) [not null]
+  berth_type varchar(50) [note: 'LB/MB/UB/SL/SU, or WS/MS/AS for sitting classes']
+  created_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
+
+  indexes {
+    (train_no, coach_no, berth_no) [unique, name: 'uq_seat_train_coach_berth']
+  }
+}
+
+Ref fk_seat_coach: seat.(train_no, coach_no) > train_coach.(train_no, coach_no) [delete: cascade]

@@ -2,19 +2,21 @@ package com.railway.train.controller;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import com.railway.train.model.RunStatusUpdate;
 import com.railway.train.model.TrainRun;
 import com.railway.train.model.TrainSchedule;
 import com.railway.train.service.ScheduleService;
 
 @RestController
 @RequestMapping("/api/schedules")
-@CrossOrigin(origins = "*")
 public class ScheduleController {
 
     @Autowired
@@ -28,25 +30,25 @@ public class ScheduleController {
     }
 
     @GetMapping("/train/{trainNo}")
-    public List<TrainSchedule> getSchedulesByTrainNo(@PathVariable Integer trainNo) {
+    public List<TrainSchedule> getSchedulesByTrainNo(@PathVariable String trainNo) {
         return scheduleService.getSchedulesByTrainNo(trainNo);
     }
 
     @GetMapping("/train/{trainNo}/{runDay}")
-    public ResponseEntity<TrainSchedule> getSchedule(@PathVariable Integer trainNo, @PathVariable String runDay) {
+    public ResponseEntity<TrainSchedule> getSchedule(@PathVariable String trainNo, @PathVariable String runDay) {
         return scheduleService.getSchedule(trainNo, runDay)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
     @PostMapping
-    public ResponseEntity<String> saveSchedule(@RequestBody TrainSchedule schedule) {
+    public ResponseEntity<String> saveSchedule(@Valid @RequestBody TrainSchedule schedule) {
         scheduleService.saveSchedule(schedule);
         return ResponseEntity.ok("Train schedule saved successfully");
     }
 
     @DeleteMapping("/train/{trainNo}/{runDay}")
-    public ResponseEntity<Void> deleteSchedule(@PathVariable Integer trainNo, @PathVariable String runDay) {
+    public ResponseEntity<Void> deleteSchedule(@PathVariable String trainNo, @PathVariable String runDay) {
         if (scheduleService.deleteSchedule(trainNo, runDay)) {
             return ResponseEntity.noContent().build();
         }
@@ -68,7 +70,7 @@ public class ScheduleController {
     }
 
     @GetMapping("/runs/train/{trainNo}")
-    public List<TrainRun> getRunsByTrainNo(@PathVariable Integer trainNo) {
+    public List<TrainRun> getRunsByTrainNo(@PathVariable String trainNo) {
         return scheduleService.getRunsByTrainNo(trainNo);
     }
 
@@ -78,9 +80,22 @@ public class ScheduleController {
     }
 
     @PostMapping("/runs")
-    public ResponseEntity<String> saveRun(@RequestBody TrainRun run) {
+    public ResponseEntity<String> saveRun(@Valid @RequestBody TrainRun run) {
         scheduleService.saveRun(run);
         return ResponseEntity.ok("Train run saved successfully");
+    }
+
+    // staff and admins: where the run is now (marking it ARRIVED notifies passengers, see ScheduleService)
+    @PatchMapping("/runs/{runId}/status")
+    public ScheduleService.RunUpdated updateRunStatus(@PathVariable int runId,
+                                                      @Valid @RequestBody RunStatusUpdate update) {
+        return scheduleService.updateRunStatus(runId, update);
+    }
+
+    // admins: create the runs for every scheduled day of the next `days` days
+    @PostMapping("/runs/generate")
+    public Map<String, Object> generateRuns(@RequestParam(defaultValue = "30") int days) {
+        return Map.of("created", scheduleService.generateRuns(days), "days", days);
     }
 
     @DeleteMapping("/runs/{runId}")
