@@ -34,6 +34,16 @@ router.post(
   controller.login
 );
 
+// POST /api/auth/admin-login — identical credential check, but only an ACTIVE
+// ADMIN receives tokens; any other role is refused before a token is issued.
+router.post(
+  '/admin-login',
+  authLimiter,
+  validation.loginRules,
+  validation.validate,
+  controller.adminLogin
+);
+
 // POST /api/auth/refresh
 router.post(
   '/refresh',

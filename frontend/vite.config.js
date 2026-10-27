@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-// One React app in front of three backends. In development Vite forwards each
+// One React app in front of every backend. In development Vite forwards each
 // /api path to the service that owns it, so the browser only ever talks to
 // one origin (no CORS) and the code uses plain relative URLs.
 //
@@ -22,6 +22,7 @@ export default defineConfig({
       '/api/auth': to(AUTH_URL),
       '/api/users': to(AUTH_URL),
       '/api/admin': to(AUTH_URL),
+      '/health': to(AUTH_URL),
 
       '/api/search': to(BOOKING_URL),
       '/api/runs': to(BOOKING_URL),

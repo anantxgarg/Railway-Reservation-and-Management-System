@@ -1,0 +1,176 @@
+:root {
+  /* ==========================================================================
+     Exact Design Specification Tokens
+     ========================================================================== */
+  --color-primary-navy: #0B1B3D;
+  --color-primary-hover: #162B56;
+  --color-charcoal: #1E293B;
+  --color-muted-slate: #64748B;
+  --color-white: #FFFFFF;
+
+  --glass-bg: rgba(255, 255, 255, 0.45);
+  --glass-blur: blur(16px);
+  --glass-border: 1px solid rgba(255, 255, 255, 0.65);
+  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.15);
+  --glass-glow: none;
+
+  --navbar-bg: #FFFFFF;
+  --navbar-blur: none;
+  --navbar-border: 1px solid #E2E8F0;
+
+  --input-bg: rgba(255, 255, 255, 0.85);
+  --input-border: #E2E8F0;
+  --input-text: #1E293B;
+  --input-placeholder: #64748B;
+  --input-focus-ring: rgba(11, 27, 61, 0.14);
+
+  /* Semantic Theme Variables */
+  --bg-main: #0B1B3D;
+  --bg-surface: rgba(255, 255, 255, 0.08);
+  --bg-card: var(--glass-bg);
+  --bg-field: var(--input-bg);
+
+  --text-primary: var(--color-charcoal);
+  --text-secondary: var(--color-muted-slate);
+  --text-light: #FFFFFF;
+  --text-light-muted: #E2E8F0;
+
+  --btn-primary-bg: var(--color-primary-navy);
+  --btn-primary-text: var(--color-white);
+  --btn-primary-hover: var(--color-primary-hover);
+
+  --link-color: var(--color-primary-navy);
+  --focus-accent: var(--color-primary-navy);
+  --border-color: var(--input-border);
+  --border-subtle: rgba(255, 255, 255, 0.35);
+
+  /* Typography */
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Elevation and Shapes */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+  --shadow-sm: 0 2px 6px rgba(11, 27, 61, 0.06);
+  --shadow-md: var(--glass-shadow);
+  --shadow-lg: 0 20px 48px rgba(11, 27, 61, 0.25);
+
+  /* Typography defaults */
+  font-family: var(--font-sans);
+  line-height: 1.5;
+  font-weight: 400;
+  color: var(--text-primary);
+  background-color: #F8FAFC;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+[data-theme="dark"] {
+  /* ==========================================================================
+     Exact Dark-Mode Specification Tokens
+     ========================================================================== */
+  /* Surfaces and background */
+  --color-main-canvas: #080C14;
+  --color-slate-overlay-1: #0F172A;
+  --color-slate-overlay-2: #0B1120;
+
+  --navbar-bg: #0B1120;
+  --navbar-blur: none;
+  --navbar-border: 1px solid rgba(255, 255, 255, 0.08);
+
+  /* Glassmorphism cards */
+  --glass-bg: rgba(15, 23, 42, 0.68);
+  --glass-blur: blur(20px);
+  --glass-border: 1px solid rgba(255, 255, 255, 0.12);
+  --glass-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+  --glass-glow: 0 0 28px rgba(56, 189, 248, 0.35);
+
+  /* Inputs */
+  --input-bg: rgba(30, 41, 59, 0.65);
+  --input-border: rgba(255, 255, 255, 0.12);
+  --input-focus-ring: #38BDF8;
+  --input-text: #FFFFFF;
+  --input-placeholder: #94A3B8;
+
+  /* Primary actions */
+  --btn-primary-bg: linear-gradient(135deg, #1D4ED8, #2563EB);
+  --btn-primary-text: #FFFFFF;
+  --btn-primary-hover: linear-gradient(135deg, #2563EB, #3B82F6);
+  --btn-focus-accent: #38BDF8;
+
+  /* Text & Colors */
+  --color-primary-navy: #FFFFFF;
+  --color-charcoal: #E2E8F0;
+  --color-muted-slate: #94A3B8;
+  --text-primary: #FFFFFF;
+  --text-secondary: #94A3B8;
+  --link-color: #38BDF8;
+  --focus-accent: #38BDF8;
+  --border-color: rgba(255, 255, 255, 0.12);
+  --bg-main: #080C14;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: #0B1B3D;
+  color: var(--text-primary);
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  color: var(--text-primary);
+  margin-top: 0;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+p {
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+a {
+  color: var(--link-color);
+  text-decoration: none;
+  transition: color 0.15s ease, opacity 0.15s ease;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  outline: none;
+}

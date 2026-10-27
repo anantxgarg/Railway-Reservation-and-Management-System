@@ -1,58 +1,12 @@
-// Shared HTTP client for the three backends (see vite.config.js for which
-// service owns which /api path). Every call sends Team 1's access token; when
-// it has expired, the refresh token is traded for a new one once and the call
-// is retried.
+// Shared HTTP client for the booking, payments, train and notification
+// services (see vite.config.js for which service owns which /api path). Every
+// call sends Team 1's access token from the same storage Team 1's login uses
+// (utils/tokenStorage.js); when it has expired, the refresh token is traded
+// for a new one once (services/session.js) and the call is retried.
+import { tokenStorage } from './utils/tokenStorage.js';
+import { expireSession, refreshSession } from './services/session.js';
 
-const TOKEN_KEY = 'railway_jwt_token';
-const REFRESH_KEY = 'railway_refresh_token';
-const USER_KEY = 'railway_user_data';
-
-const read = (key) => {
-  try {
-    return localStorage.getItem(key);
-  } catch (e) {
-    return null;
-  }
-};
-
-const write = (key, value) => {
-  try {
-    if (value == null) localStorage.removeItem(key);
-    else localStorage.setItem(key, value);
-  } catch (e) {
-    // private window or storage blocked: the session lasts until reload
-  }
-};
-
-/** The logged-in user ({userId, name, email, role, ...}) or null. */
-export const getCurrentUser = () => {
-  try {
-    const raw = read(USER_KEY);
-    return raw && read(TOKEN_KEY) ? JSON.parse(raw) : null;
-  } catch (e) {
-    return null;
-  }
-};
-
-export const getAuthToken = () => read(TOKEN_KEY) || '';
-
-export const setAuthSession = (token, refreshToken, user) => {
-  write(TOKEN_KEY, token);
-  write(REFRESH_KEY, refreshToken);
-  write(USER_KEY, JSON.stringify(user));
-};
-
-export const clearAuthSession = () => {
-  write(TOKEN_KEY, null);
-  write(REFRESH_KEY, null);
-  write(USER_KEY, null);
-};
-
-// App.jsx registers this to show the login page when the session is gone.
-let onSessionEnded = () => {};
-export const setSessionEndedHandler = (handler) => {
-  onSessionEnded = handler;
-};
+export const getAuthToken = () => tokenStorage.getAccessToken() || '';
 
 /**
  * The message of an error body. Team 1 and the booking service send
@@ -84,28 +38,6 @@ async function send(endpoint, method, body, token) {
   return { res, data };
 }
 
-// One refresh at a time, shared by all calls that hit an expired token together.
-let refreshing = null;
-
-async function refreshSession() {
-  const refreshToken = read(REFRESH_KEY);
-  if (!refreshToken) return false;
-  if (!refreshing) {
-    refreshing = send('/api/auth/refresh', 'POST', { refreshToken })
-      .then(({ res, data }) => {
-        if (!res.ok || !data?.token) return false;
-        write(TOKEN_KEY, data.token);
-        write(REFRESH_KEY, data.refreshToken);
-        return true;
-      })
-      .catch(() => false)
-      .finally(() => {
-        refreshing = null;
-      });
-  }
-  return refreshing;
-}
-
 export async function apiRequest(endpoint, method = 'GET', body = null) {
   const token = getAuthToken();
   let { res, data } = await send(endpoint, method, body, token);
@@ -114,10 +46,7 @@ export async function apiRequest(endpoint, method = 'GET', body = null) {
     if (await refreshSession()) {
       ({ res, data } = await send(endpoint, method, body, getAuthToken()));
     }
-    if (res.status === 401) {
-      clearAuthSession();
-      onSessionEnded();
-    }
+    if (res.status === 401) expireSession();
   }
 
   if (!res.ok) {
@@ -128,28 +57,6 @@ export async function apiRequest(endpoint, method = 'GET', body = null) {
     throw err;
   }
   return data;
-}
-
-// ---------- Team 1: users and auth ----------
-
-export async function login(email, password) {
-  const { res, data } = await send('/api/auth/login', 'POST', { email, password });
-  if (!res.ok) {
-    const err = new Error(errorMessage(data, res.status));
-    err.status = res.status;
-    throw err;
-  }
-  setAuthSession(data.token, data.refreshToken, data.user);
-  return data.user;
-}
-
-export async function logout() {
-  try {
-    await apiRequest('/api/auth/logout', 'POST');
-  } catch (e) {
-    // the session ends locally either way
-  }
-  clearAuthSession();
 }
 
 // ---------- Team 3: search, availability, bookings (booking-service) ----------

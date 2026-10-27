@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 import {
   Box, Card, CardContent, Typography, Button, Alert, CircularProgress, Chip,
   Table, TableHead, TableBody, TableRow, TableCell, TableContainer, Link
@@ -54,7 +55,7 @@ export default function MyBookings() {
                 return (
                   <TableRow key={b.pnr} hover>
                     <TableCell>
-                      <Link href={`#/pnr/${b.pnr}`} underline="hover" fontWeight={600}>{b.pnr}</Link>
+                      <Link component={RouterLink} to={`/pnr/${b.pnr}`} underline="hover" fontWeight={600}>{b.pnr}</Link>
                     </TableCell>
                     <TableCell>{b.trainName}<br /><Typography variant="caption" color="text.secondary">#{b.trainNo}</Typography></TableCell>
                     <TableCell>

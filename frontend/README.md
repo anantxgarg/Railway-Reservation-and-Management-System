@@ -1,10 +1,10 @@
 # Frontend
 
-One React app (Vite, Material UI) for every team's screens. In development it runs on **http://localhost:5173**, and Vite forwards each `/api` path to the service that owns it, so the browser only talks to one origin:
+One React app (Vite, react-router, Material UI) for every team's screens. In development it runs on **http://localhost:5173**, and Vite forwards each `/api` path to the service that owns it, so the browser only talks to one origin:
 
 | Path | Service | Default target | Override |
 |---|---|---|---|
-| `/api/auth`, `/api/users`, `/api/admin` | Team 1, users and auth | `http://localhost:3000` | `AUTH_URL` |
+| `/api/auth`, `/api/users`, `/api/admin`, `/health` | Team 1, users and auth | `http://localhost:3000` | `AUTH_URL` |
 | `/api/search`, `/api/runs`, `/api/bookings` | Team 3, booking-service | `http://localhost:8082` | `BOOKING_URL` |
 | `/api/payments`, `/api/refunds`, `/api/concessions` | Team 4, payments app | `http://localhost:8081` | `PAYMENTS_URL` |
 
@@ -15,46 +15,57 @@ npm run dev                                      # http://localhost:5173
 PAYMENTS_URL=http://localhost:8091 npm run dev   # e.g. when 8081 is taken
 ```
 
-Start the three backends first (see the root README). A new path needs a line in `vite.config.js`.
+Start the backends first (see the root README). A new path needs a line in `vite.config.js`.
 
 ## Screens
 
-The address is a hash route, so a page such as a PNR can be bookmarked or reloaded.
+| Route | Screen | Who | Owner |
+|---|---|---|---|
+| `/login`, `/register`, `/forgot-password`, `/reset-password` | Sign in, create an account, reset a password | everyone | Team 1 |
+| `/admin/login` | Admin-only sign in (`POST /api/auth/admin-login`) | admins | Team 1 |
+| `/search`, `/search/{from}/{to}/{date}` | Search trains, with availability and fare per class | all | Team 3 |
+| `/book/{runId}/{class}/{from}/{to}` | Passenger form, 1 to 6 passengers; holds the seats | customers | Team 3 |
+| `/pnr/{pnr}` | Review the held booking with its 15-minute countdown and pay; PNR status; cancel passengers (unpaid) or cancel with refund (paid) | all | Team 3, payment and refund steps by Team 4 |
+| `/pnr` | PNR lookup | all | Team 3 |
+| `/bookings` | My bookings | customers | Team 3 |
+| `/payments`, `/refunds`, `/concessions` | My payments, refunds, concession applications and staff review | customers (`/payments`), all | Team 4 |
+| `/account` | Profile and change password | customers, staff | Team 1 |
+| `/admin` | Profile, user lookup, unlock account, change password | admins | Team 1 |
 
-| Route | Screen | Owner |
-|---|---|---|
-| (no session) | Log in with Team 1's `POST /api/auth/login` | Team 3 for now, see below |
-| `#/search`, `#/search/{from}/{to}/{date}` | Search trains, with availability and fare per class | Team 3 |
-| `#/book/{runId}/{class}/{from}/{to}` | Passenger form, 1 to 6 passengers; holds the seats | Team 3 |
-| `#/pnr/{pnr}` | Review the held booking with its 15-minute countdown and pay; PNR status; cancel passengers (unpaid) or cancel with refund (paid) | Team 3, payment and refund steps by Team 4 |
-| `#/pnr` | PNR lookup | Team 3 |
-| `#/bookings` | My bookings | Team 3 |
-| `#/payments`, `#/refunds`, `#/concessions` | My payments, refunds, concession applications and staff review | Team 4 |
-
-Customers see every tab. Staff and admins can search and open any PNR, but can't book; they review concessions instead.
+Staff and admins can search and open any PNR, but can't book; they review concessions instead.
 
 ## Code
 
 ```
 src/
-  api.js                  HTTP client for all three services: token, refresh, error messages
-  router.js               hash router (useRoute, navigate)
-  App.jsx                 layout, tabs, login gate
-  features/auth/          LoginPage
+  App.jsx                 routes: public account pages, and the logged-in app inside AppShell
+  tabs.jsx                the logged-in app's tabs and which roles see them
+  components/AppShell.jsx header, tabs and Material UI theme of the logged-in app
+  router.js               navigate() for the booking/payment screens, bridged to react-router
+  api.js                  HTTP client for the booking and payments services
+  theme.js                Material UI theme (dark)
+
+  # Team 1: accounts
+  pages/                  Login, Register, ForgotPassword, ResetPassword, AdminLogin, Unauthorized
+  pages/destinations/     account pages shown in the app (customer, staff, admin)
+  context/                AuthContext (session), ThemeContext (light/dark for the account pages)
+  services/api.js         HTTP client for Team 1's API
+  services/session.js     token refresh and session expiry, shared by both clients
+  utils/                  token storage, validation, roles
+
+  # Team 3: booking
   features/booking/       search, passenger form, booking/PNR page, my bookings
-  components/             Team 4: checkout.js (Razorpay), MyPayments, Refunds, Concessions
+
+  # Team 4: payments
+  components/             checkout.js (Razorpay), MyPayments, Refunds, Concessions
 ```
 
-- **Login.** The token and refresh token from Team 1 are kept in `localStorage`. An access token lasts 15 minutes. When a call gets `401`, `api.js` trades the refresh token for a new pair once and retries; if that fails too, the login page comes back. `LoginPage` is a stand-in built by Team 3 so the booking screens can be used. Team 1 should replace it with their own (registration, password reset).
+- **Login.** Team 1's pages sign in and keep the access token, refresh token and user in `localStorage` (`utils/tokenStorage.js`). Both HTTP clients send the token. When a call gets `401`, the refresh token is traded for a new pair once (`services/session.js`, one refresh at a time) and the call retried; if that fails too, the login page comes back with a message.
+- **Themes.** The account pages have Team 1's light and dark themes. The logged-in app is dark; it switches Team 1's cards to dark while it is shown.
 - **Errors.** Team 1 and Team 3 answer `{"error": {"code", "message"}}`, Team 4 `{"error": "message"}`; `errorMessage()` in `api.js` reads both.
-- **Payment.** `#/pnr/{pnr}` hands a held booking to `payForBooking()` in `components/checkout.js`. It asks Team 4 for a Razorpay order (Team 4 reads the amount from the booking), opens Razorpay Checkout, and sends the result to `/api/payments/verify`, which confirms the booking. Razorpay's `checkout.js` is loaded in `index.html`.
+- **Payment.** `/pnr/{pnr}` hands a held booking to `payForBooking()` in `components/checkout.js`. It asks Team 4 for a Razorpay order (Team 4 reads the amount from the booking), opens Razorpay Checkout, and sends the result to `/api/payments/verify`, which confirms the booking. Razorpay's `checkout.js` is loaded in `index.html`.
 - **Cancelling.** An unpaid booking is cancelled by the booking service (`POST /api/bookings/{pnr}/cancel`). A paid one goes to Team 4 (`GET /api/refunds/preview/{pnr}`, then `POST /api/refunds`), which cancels the passengers and refunds them in one transaction.
 
-## Known gaps
+`npm run build` writes a static build to `dist/`. Serving it needs the same path routing as `vite.config.js` (e.g. a reverse proxy) and a fallback to `index.html` for the app's routes.
 
-- **No departure or arrival times.** The schema doesn't store a train's departure time yet (Team 2), so the screens show dates only.
-- **Stations are typed as codes** (`NDLS`, `MAS`, ...). There is no station list endpoint yet (Team 2).
-- **General quota only, no concession at booking.** Quotas and `concession_rule` are placeholders until Teams 2 and 4 decide on them; the booking API already accepts `quotaCode` and `concessionId`.
-- **No frontend tests yet.** The flow was checked end to end in headless Chrome against all three services, with Razorpay stubbed.
-
-`npm run build` writes a static build to `dist/`. Serving it needs the same path routing as `vite.config.js`, e.g. a reverse proxy; no backend serves it.
+Node 18 runs everything; react-router asks for Node 20 and prints an `EBADENGINE` warning on `npm ci`, which is harmless.

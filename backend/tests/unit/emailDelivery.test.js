@@ -57,7 +57,8 @@ describe('emailService — Brevo transactional email delivery API', () => {
   test('buildResetUrl generates a valid URL with encoded token and base frontend URL', () => {
     const token = 'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890';
     const url = emailService.buildResetUrl(token);
-    expect(url).toBe(`http://localhost:5173/reset-password?token=${token}`);
+    const base = (config.frontendUrl || config.corsOrigin || 'http://localhost:5173').replace(/\/+$/, '');
+    expect(url).toBe(`${base}/reset-password?token=${token}`);
   });
 
   test('sendPasswordResetEmail skips sending when unconfigured and no custom fetch', async () => {
@@ -102,8 +103,9 @@ describe('emailService — Brevo transactional email delivery API', () => {
     expect(body.sender).toBeDefined();
 
     // Plain text and HTML contain clickable reset link
+    const expectedBase = (config.frontendUrl || config.corsOrigin || 'http://localhost:5173').replace(/\/+$/, '');
     expect(body.textContent).toContain('/reset-password?token=test-token-value-12345');
-    expect(body.htmlContent).toContain('<a href="http://localhost:5173/reset-password?token=test-token-value-12345"');
+    expect(body.htmlContent).toContain(`<a href="${expectedBase}/reset-password?token=test-token-value-12345"`);
     expect(body.htmlContent).toContain('Reset Password');
 
     // Never logs or exposes token, link, or credentials

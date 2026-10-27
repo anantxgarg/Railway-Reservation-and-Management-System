@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 import {
   Box, Card, Typography, Table, TableBody,
   TableCell, TableContainer, TableHead, TableRow, Paper,
@@ -96,7 +97,7 @@ export default function MyPayments({ user }) {
                     </Typography>
                   </TableCell>
                   <TableCell>
-                    <Link href={`#/pnr/${p.pnr}`} underline="hover" sx={{ color: '#f8fafc' }}>{p.pnr}</Link>
+                    <Link component={RouterLink} to={`/pnr/${p.pnr}`} underline="hover" sx={{ color: '#f8fafc' }}>{p.pnr}</Link>
                   </TableCell>
                   <TableCell>
                     <Typography variant="caption" sx={{ color: '#64748b' }}>

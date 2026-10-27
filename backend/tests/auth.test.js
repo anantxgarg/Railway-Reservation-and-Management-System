@@ -25,33 +25,36 @@ require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') }
 
 // ── Environment setup ─────────────────────────────────────────────────────────
 // Point to a dedicated test database to avoid touching the dev database.
-process.env.NODE_ENV     = 'test';
-process.env.PGDATABASE   = process.env.TEST_DB || 'railway_test';
+process.env.NODE_ENV = 'test';
+process.env.PGDATABASE = process.env.TEST_DB || 'railway_test';
+
+const { assertDisposableTestDb } = require('./helpers/dbGuard');
+assertDisposableTestDb();
 // Allow a short JWT expiry for expiry tests
 process.env.JWT_EXPIRES_IN = '5s';
 // Use a fixed secret in tests
 process.env.JWT_SECRET = 'test_secret_that_is_at_least_64_characters_long_xxxxxxxxxxxxxxxxx';
-process.env.PGHOST     = process.env.PGHOST     || 'localhost';
-process.env.PGPORT     = process.env.PGPORT     || '5432';
-process.env.PGUSER     = process.env.PGUSER     || 'postgres';
+process.env.PGHOST = process.env.PGHOST || 'localhost';
+process.env.PGPORT = process.env.PGPORT || '5432';
+process.env.PGUSER = process.env.PGUSER || 'postgres';
 process.env.PGPASSWORD = process.env.PGPASSWORD || 'postgres';
-process.env.MONGO_URI  = process.env.MONGO_URI  || 'mongodb://localhost:27017/railway_test';
+process.env.MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/railway_test';
 process.env.LOGIN_LOCKOUT_THRESHOLD = '3'; // lower threshold for lockout tests
 
-const request  = require('supertest');
-const bcrypt   = require('bcryptjs');
-const app      = require('../src/app');
-const db       = require('../src/config/db');
+const request = require('supertest');
+const bcrypt = require('bcryptjs');
+const app = require('../src/app');
+const db = require('../src/config/db');
 
 // ── Mock MongoDB so audit tests don't require a live Mongo ──────────────────
 jest.mock('../src/config/mongo', () => {
   const insertOne = jest.fn().mockResolvedValue({ acknowledged: true });
   const collection = jest.fn().mockReturnValue({ insertOne });
   return {
-    connect:          jest.fn().mockResolvedValue(undefined),
-    close:            jest.fn().mockResolvedValue(undefined),
-    getDb:            jest.fn().mockReturnValue({ collection }),
-    auditCollection:  jest.fn().mockReturnValue({ insertOne }),
+    connect: jest.fn().mockResolvedValue(undefined),
+    close: jest.fn().mockResolvedValue(undefined),
+    getDb: jest.fn().mockReturnValue({ collection }),
+    auditCollection: jest.fn().mockReturnValue({ insertOne }),
   };
 });
 
@@ -59,9 +62,9 @@ jest.mock('../src/config/mongo', () => {
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-const TEST_EMAIL    = 'testauth_unique@test-domain.example';
+const TEST_EMAIL = 'testauth_unique@test-domain.example';
 const TEST_PASSWORD = 'TestPass@99!';
-const TEST_NAME     = 'Auth Test User';
+const TEST_NAME = 'Auth Test User';
 
 /** Clean up rows created by individual tests to keep each test isolated. */
 async function deleteTestUser(email) {
@@ -76,9 +79,9 @@ async function apiRegister(overrides = {}) {
   return request(app)
     .post('/api/auth/register')
     .send({
-      name:     TEST_NAME,
-      email:    TEST_EMAIL,
-      phone:    '+919876543210',
+      name: TEST_NAME,
+      email: TEST_EMAIL,
+      phone: '+919876543210',
       password: TEST_PASSWORD,
       ...overrides,
     });
@@ -426,7 +429,7 @@ describe('POST /api/auth/logout', () => {
     await deleteTestUser(TEST_EMAIL);
     await apiRegister();
     const loginRes = await apiLogin();
-    token        = loginRes.body.token;
+    token = loginRes.body.token;
     refreshToken = loginRes.body.refreshToken;
   });
 

@@ -1,21 +1,25 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
-// A tiny hash router: #/pnr/1000000016 -> ['pnr', '1000000016']. Hash URLs
-// work with Vite's dev server and any static host without server rewrites,
-// and links such as a PNR can be bookmarked or shared.
+// The booking and payment screens navigate with a plain function,
+// navigate('/pnr/1000000016'). The app runs on react-router (Team 1's
+// routing, see App.jsx); <RouterBridge /> hands its navigate to this module.
 
-const parse = () => window.location.hash.replace(/^#\/?/, '').split('/').filter(Boolean).map(decodeURIComponent);
+let routerNavigate = null;
 
-export function useRoute() {
-  const [route, setRoute] = useState(parse);
+export function RouterBridge() {
+  const nav = useNavigate();
   useEffect(() => {
-    const onChange = () => setRoute(parse());
-    window.addEventListener('hashchange', onChange);
-    return () => window.removeEventListener('hashchange', onChange);
-  }, []);
-  return route;
+    routerNavigate = nav;
+    return () => {
+      routerNavigate = null;
+    };
+  }, [nav]);
+  return null;
 }
 
 export const navigate = (path) => {
-  window.location.hash = path.startsWith('/') ? path : `/${path}`;
+  const to = path.startsWith('/') ? path : `/${path}`;
+  if (routerNavigate) routerNavigate(to);
+  else window.location.assign(to);
 };

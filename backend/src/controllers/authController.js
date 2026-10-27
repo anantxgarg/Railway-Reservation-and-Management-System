@@ -42,6 +42,7 @@ function codeToStatus(code) {
     case 'EMAIL_TAKEN':          return 409;
     case 'INVALID_CREDENTIALS':  return 401;
     case 'ACCOUNT_NOT_ACTIVE':   return 403;
+    case 'ROLE_NOT_PERMITTED':   return 403;
     case 'INVALID_REFRESH_TOKEN':
     case 'EXPIRED_REFRESH_TOKEN':return 401;
     case 'INVALID_RESET_TOKEN':  return 400;
@@ -110,6 +111,30 @@ async function login(req, res) {
       message:      result.message,
       token:        result.accessToken,   // access token (short-lived JWT)
       refreshToken: result.refreshToken,  // refresh token (long-lived opaque)
+      user:         result.user,
+    });
+  } catch (err) {
+    return handleError(res, err);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/auth/admin-login  (same credentials check, ADMIN role only)
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function adminLogin(req, res) {
+  try {
+    const { email, password } = req.body;
+    const result = await authService.login(
+      { email, password },
+      requestMeta(req),
+      { requiredRole: 'ADMIN' }
+    );
+
+    return res.status(200).json({
+      message:      result.message,
+      token:        result.accessToken,
+      refreshToken: result.refreshToken,
       user:         result.user,
     });
   } catch (err) {
@@ -239,6 +264,7 @@ async function resetPassword(req, res) {
 module.exports = {
   register,
   login,
+  adminLogin,
   me,
   logout,
   refresh,
