@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import NotificationsIcon from "@mui/icons-material/Notifications";
-import { request } from "../../http";
+import { request } from "../team6Http";
 import "./notifications.css";
 
 // How often (in milliseconds) we ask the backend for the unread count. 15000 ms = 15 seconds.

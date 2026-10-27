@@ -1,6 +1,6 @@
 ### Demo requests for the Team 6 backend.
 ### Open in VS Code with the "REST Client" extension, then click "Send Request" above a block.
-### Start the backend first:  cd backend  ->  .\mvnw.cmd spring-boot:run
+### Start the backend first:  cd notification-service  ->  .\mvnw.cmd spring-boot:run
 
 @base = http://localhost:8086/api
 @user = u_demo

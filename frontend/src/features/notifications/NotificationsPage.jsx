@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Box, Button, Card, CardContent, Chip, Divider, Stack, Typography } from "@mui/material";
 import NotificationsIcon from "@mui/icons-material/Notifications";
-import { request } from "../../http";
+import { request } from "../team6Http";
 import "./notifications.css";
 
 // ---- Calls to the backend's notification module (NotificationController and DemoController) ----

@@ -9,7 +9,7 @@ import "./livestatus.css";
 // The backend has no live-status endpoint yet (it needs the schedule data from Siddhi's group),
 // so for now getLiveStatus() returns sample data. It already returns a Promise, like a real fetch
 // does, so when the endpoint exists only this function changes, e.g.:
-//   import { request } from "../../http";
+//   import { request } from "../team6Http";
 //   return request(`/live-status/${encodeURIComponent(pnr)}`);
 // and the page below stays the same.
 

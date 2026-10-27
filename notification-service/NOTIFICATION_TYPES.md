@@ -18,7 +18,7 @@ POST http://localhost:8086/api/notifications
 Content-Type: application/json
 ```
 
-(Our backend is in [../backend](../backend). `GET /api/notifications/types` lists every type and
+(Our backend is this folder. `GET /api/notifications/types` lists every type and
 its required fields.)
 
 ```json
@@ -46,7 +46,7 @@ its required fields.)
   booking or payment.** Call us after your work has committed, and only log our errors.
 
 **Easiest way from Java:** copy
-[NotificationHandle.java](../backend/src/main/java/com/railway/team6/notification/NotificationHandle.java)
+[NotificationHandle.java](src/main/java/com/railway/team6/notification/NotificationHandle.java)
 into your project (change its `package` line), then:
 
 ```java

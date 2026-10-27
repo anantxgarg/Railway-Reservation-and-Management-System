@@ -9,7 +9,7 @@ This is the server for Team 6. It does two jobs:
 
 Built with **Spring Boot 3** and **Java 17** (the same as the other teams). Data is saved in **MongoDB**.
 
-What other teams should send us is in [../frontend/README.md](../frontend/README.md).
+What other teams should send us is in [NOTIFICATION_TYPES.md](NOTIFICATION_TYPES.md).
 
 ---
 
@@ -23,7 +23,7 @@ You need:
 Then run:
 
 ```powershell
-cd backend
+cd notification-service
 .\mvnw.cmd spring-boot:run
 ```
 

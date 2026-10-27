@@ -3,7 +3,7 @@ import {
   Alert, Box, Button, Card, CardContent, Chip, Divider, Rating, Stack, TextField, Typography,
 } from "@mui/material";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import { request } from "../../http";
+import { request } from "../team6Http";
 import "./feedback.css";
 
 // ---- Calls to the backend's feedback module (FeedbackController) ----
