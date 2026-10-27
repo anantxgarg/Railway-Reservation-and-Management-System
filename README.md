@@ -29,6 +29,8 @@ Full-stack Railway Reservation & Management System featuring ticket booking, PNR
 
 ## Running everything
 
+> **Step by step, with every setting, key and login: [HOW_TO_RUN.md](HOW_TO_RUN.md).** Below is the short version.
+
 Five backends, one PostgreSQL database, one MongoDB and one React app. In development the app's dev server forwards each `/api` path to the backend that owns it, so the browser only talks to http://localhost:5173.
 
 | Service | Folder | Port | Owns |
