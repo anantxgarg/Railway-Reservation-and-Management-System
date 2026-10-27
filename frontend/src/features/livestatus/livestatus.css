@@ -1,0 +1,22 @@
+/* Styles for LiveStatusPage only. It imports this file itself, so it looks the same in any app. */
+
+.panel {
+  border: 1px solid #e1e8f0;
+  border-radius: 16px !important;
+  box-shadow: 0 5px 20px rgba(20, 45, 80, .045) !important;
+}
+
+.station-table {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1.3fr .7fr;
+  align-items: center;
+  gap: 12px;
+  padding: 15px 12px;
+  border-bottom: 1px solid #e8edf4;
+}
+
+.table-header {
+  font-weight: 700;
+  background: #eef4fb;
+  border-radius: 8px;
+}
