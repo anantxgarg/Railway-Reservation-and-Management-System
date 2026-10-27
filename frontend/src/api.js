@@ -9,15 +9,16 @@ import { expireSession, refreshSession } from './services/session.js';
 export const getAuthToken = () => tokenStorage.getAccessToken() || '';
 
 /**
- * The message of an error body. Team 1 and the booking service send
- * {"error": {"code", "message"}}; the payments app sends {"error": "message"}.
+ * The message of an error body. Team 1, booking and train-service send
+ * {"error": {"code", "message"}}; the payments app sends {"error": "message"};
+ * notification-service sends Spring's {"error": "Conflict", "message": "..."}.
  */
 export const errorMessage = (data, status) => {
   if (data?.error && typeof data.error === 'object') {
     const fields = data.error.fields?.map((f) => `${f.field}: ${f.message}`).join('; ');
     return fields ? `${data.error.message} (${fields})` : data.error.message;
   }
-  if (typeof data?.error === 'string') return data.error;
+  if (typeof data?.error === 'string') return data.message || data.error;
   return data?.message || `Request failed with status ${status}`;
 };
 
@@ -101,3 +102,22 @@ export const api = {
   getMyRefunds: () => apiRequest('/api/refunds/my'),
   getRefundsForBooking: (pnr) => apiRequest(`/api/refunds/booking/${encodeURIComponent(pnr)}`),
 };
+
+// ---------- Team 2: trains, stations, routes, runs, live status (train-service) ----------
+
+export const networkApi = {
+  stations: () => apiRequest('/api/stations'),
+  trains: () => apiRequest('/api/trains'),
+  trainStops: (trainNo) => apiRequest(`/api/route-stations/train/${encodeURIComponent(trainNo)}`),
+  schedules: (trainNo) => apiRequest(`/api/schedules/train/${encodeURIComponent(trainNo)}`),
+  coaches: (trainNo) => apiRequest(`/api/coaches/train/${encodeURIComponent(trainNo)}`),
+  runsOn: (date) => apiRequest(`/api/schedules/runs/date/${date}`),
+  // staff and admins: where a run is now; ARRIVED tells its passengers (Team 6)
+  setRunStatus: (runId, status, delayMinutes) =>
+    apiRequest(`/api/schedules/runs/${runId}/status`, 'PATCH', { status, delayMinutes }),
+  liveStatusOfRun: (runId) => apiRequest(`/api/live-status/run/${runId}`),
+  liveStatusOfPnr: (pnr) => apiRequest(`/api/live-status/pnr/${encodeURIComponent(pnr)}`),
+};
+
+// ---------- Team 6: notifications and feedback (notification-service) ----------
+// Team 6's pages call these through features/team6Http.js.

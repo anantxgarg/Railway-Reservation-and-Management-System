@@ -108,4 +108,13 @@ public class BookingRepository {
         Integer expired = jdbc.queryForObject("CALL expire_holds()", Integer.class);
         return expired == null ? 0 : expired;
     }
+
+    /** Queues Team 6's BOOKING_CANCELLED for an unpaid booking (no refund); see 08_notifications.sql. */
+    public void queueCancelledNotification(String pnr, int cancelledPassengers, String reason) {
+        jdbc.queryForObject("""
+                SELECT queue_notification('BOOKING_CANCELLED', pnr, 'team-3', jsonb_build_object(
+                           'trainNumber', train_no, 'journeyDate', journey_date::TEXT,
+                           'cancelledPassengers', ?, 'refundAmount', 0, 'reason', ?))
+                FROM v_user_bookings WHERE pnr = ?""", Long.class, cancelledPassengers, reason, pnr);
+    }
 }

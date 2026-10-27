@@ -48,7 +48,19 @@ public class NotificationHandle {
      * sourceTeam:   your team's name, shown in our log, e.g. "team-2"
      */
     public NotificationHandle(String team6BaseUrl, String sourceTeam) {
-        this.restClient = RestClient.create(team6BaseUrl);
+        this(team6BaseUrl, sourceTeam, null);
+    }
+
+    /*
+     * internalKey: the NOTIFICATIONS_API_KEY Team 6 was started with, sent as "X-Internal-Key".
+     *              null or empty when Team 6 runs without a key (development).
+     */
+    public NotificationHandle(String team6BaseUrl, String sourceTeam, String internalKey) {
+        RestClient.Builder builder = RestClient.builder().baseUrl(team6BaseUrl);
+        if (internalKey != null && !internalKey.isBlank()) {
+            builder.defaultHeader("X-Internal-Key", internalKey);
+        }
+        this.restClient = builder.build();
         this.sourceTeam = sourceTeam;
     }
 
@@ -151,13 +163,27 @@ public class NotificationHandle {
      * Returns true if Team 6 accepted it, false otherwise (never throws).
      */
     private boolean send(String type, String userId, String pnr, Map<String, Object> data) {
+        // Current time without fractions of a second, e.g. "2026-10-21T14:30:00".
+        String error = sendRaw(type, userId, pnr, data, LocalDateTime.now().truncatedTo(ChronoUnit.SECONDS));
+        if (error != null) {
+            // Server down, or our request was rejected (e.g. a required field missing). Log and move on.
+            log.warn("Team 6 notification {} for PNR {} failed: {}", type, pnr, error);
+        }
+        return error == null;
+    }
+
+    /*
+     * For senders that already have the "data" map, e.g. booking-service delivering the events
+     * other teams wrote to the notification_outbox table. Never throws.
+     * Returns null if Team 6 accepted it, otherwise why it failed (so the sender can retry later).
+     */
+    public String sendRaw(String type, String userId, String pnr, Map<String, Object> data, LocalDateTime eventTime) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("type", type);
         body.put("userId", userId);
         body.put("pnr", pnr);
         body.put("sourceTeam", sourceTeam);
-        // Current time without fractions of a second, e.g. "2026-10-21T14:30:00".
-        body.put("eventTime", LocalDateTime.now().truncatedTo(ChronoUnit.SECONDS).toString());
+        body.put("eventTime", eventTime.truncatedTo(ChronoUnit.SECONDS).toString());
         body.put("data", data);
 
         try {
@@ -167,11 +193,9 @@ public class NotificationHandle {
                     .body(body)                // the Map is turned into JSON automatically
                     .retrieve()                // send it; a 4xx/5xx reply becomes an exception
                     .toBodilessEntity();       // we don't need the reply body
-            return true;
+            return null;
         } catch (RestClientException e) {
-            // Server down, or our request was rejected (e.g. a required field missing). Log and move on.
-            log.warn("Team 6 notification {} for PNR {} failed: {}", type, pnr, e.getMessage());
-            return false;
+            return e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
         }
     }
 }

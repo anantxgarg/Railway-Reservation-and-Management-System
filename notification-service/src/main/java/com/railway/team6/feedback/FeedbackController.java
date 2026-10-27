@@ -3,6 +3,7 @@ package com.railway.team6.feedback;
 import com.railway.team6.notification.Notification;
 import com.railway.team6.notification.NotificationRepository;
 import com.railway.team6.notification.NotificationType;
+import com.railway.team6.security.Caller;
 import jakarta.validation.Valid;
 import org.bson.Document;
 import org.springframework.dao.DuplicateKeyException;
@@ -61,6 +62,7 @@ public class FeedbackController {
     // @RequestParam reads "?userId=...&pnr=..." from the URL.
     @GetMapping("/form")
     public FeedbackForm getForm(@RequestParam String userId, @RequestParam String pnr) {
+        Caller.requireSelfOrStaff(userId);
         Notification journeyCompleted = findCompletedJourney(userId, pnr);
         return new FeedbackForm(userId, pnr, journeyCompleted.getData(),
                 repository.existsByUserIdAndPnr(userId, pnr));
@@ -70,6 +72,11 @@ public class FeedbackController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public Feedback submit(@Valid @RequestBody FeedbackRequest request) {
+        // Only the passenger themself can rate their journey (userId must be the logged-in user).
+        Caller caller = Caller.current();
+        if (caller == null || !caller.userId().equals(request.userId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only give feedback for your own journeys");
+        }
         // Only allowed after a JOURNEY_COMPLETED notification exists for this user + PNR.
         Notification journeyCompleted = findCompletedJourney(request.userId(), request.pnr());
 
@@ -98,6 +105,7 @@ public class FeedbackController {
 
     @GetMapping("/user/{userId}")
     public List<Feedback> getForUser(@PathVariable String userId) {
+        Caller.requireSelfOrStaff(userId);
         return repository.findByUserIdOrderBySubmittedAtDesc(userId);
     }
 

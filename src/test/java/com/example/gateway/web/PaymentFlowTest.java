@@ -107,6 +107,11 @@ class PaymentFlowTest extends PaymentApiTestBase {
                 .andExpect(jsonPath("$.status").value("PAID"))
                 .andExpect(jsonPath("$.pnr").value(pnr));
         assertThat(bookingStatus(pnr)).isEqualTo("CONFIRMED");
+        // Team 6 is told, via Team 3's notification outbox: booking confirmed, payment received
+        assertThat(jdbc.queryForList("SELECT type FROM notification_outbox WHERE pnr = ? ORDER BY event_id", String.class, pnr))
+                .containsExactly("BOOKING_CONFIRMED", "PAYMENT_CONFIRMED");
+        assertThat(jdbc.queryForObject("SELECT data->>'razorpayPaymentId' FROM notification_outbox WHERE pnr = ? AND type = 'PAYMENT_CONFIRMED'",
+                String.class, pnr)).isEqualTo("pay_ok1");
 
         // Razorpay's webhook for the same payment arrives later: nothing changes
         webhookCaptured("evt_1", orderId, "pay_ok1").andExpect(status().isOk());

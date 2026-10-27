@@ -6,6 +6,7 @@ import {
 } from '@mui/material';
 import PaymentIcon from '@mui/icons-material/Payment';
 import TimerIcon from '@mui/icons-material/TimerOutlined';
+import GpsFixedIcon from '@mui/icons-material/GpsFixed';
 import { api, bookingApi } from '../../api';
 import { payForBooking } from '../../components/checkout';
 import { navigate } from '../../router';
@@ -16,7 +17,7 @@ import {
 const HOLD_MS = 15 * 60 * 1000;
 
 /**
- * One booking (#/pnr/{pnr}): PNR status for everyone allowed to see it, and
+ * One booking (/pnr/{pnr}): PNR status for everyone allowed to see it, and
  * for the owner of an unpaid booking the review step, with the 15-minute
  * hold countdown and the hand-off to Team 4's payment.
  *
@@ -112,6 +113,13 @@ export default function BookingPage({ pnr, user }) {
           <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1.5, mb: 1 }}>
             <Typography variant="h5" component="h1">PNR {booking.pnr}</Typography>
             <Chip label={booking.status} color={BOOKING_STATUS_COLOR[booking.status]} sx={{ fontWeight: 600 }} />
+            <Box sx={{ flexGrow: 1 }} />
+            {/* Team 6's live status page, fed by Team 2's train-service */}
+            {booking.status === 'CONFIRMED' && (
+              <Button size="small" variant="outlined" startIcon={<GpsFixedIcon />} onClick={() => navigate(`/live-status/${booking.pnr}`)}>
+                Live status
+              </Button>
+            )}
           </Box>
           <Typography variant="h6" component="p">
             {booking.trainName} <Typography component="span" color="text.secondary">#{booking.trainNo}</Typography>

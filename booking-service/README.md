@@ -24,8 +24,15 @@ On Windows use `mvnw.cmd` and set the variables with `set NAME=value` first.
 | `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD` | `localhost`, `5432`, `railway`, `postgres`, empty | Same variables as `setup.sh` and Team 1 |
 | `JWT_SECRET` | none, so the service won't start without it | Team 1's signing secret, at least 32 bytes |
 | `BOOKING_PORT` | `8082` | |
+| `NOTIFICATIONS_URL` | `http://localhost:8086` | Team 6's notification-service |
+| `NOTIFICATIONS_API_KEY` | empty | The key notification-service was started with, if any |
+| `NOTIFICATIONS_ENABLED` | `true` | `false` stops delivering notifications |
 
 Unpaid holds are expired every minute (`CALL expire_holds()`). Change the interval with `booking.expire-holds.interval-ms`, or turn the job off with `booking.expire-holds.enabled=false`.
+
+## Notifications for Team 6
+
+Every team writes Team 6's notifications to `notification_outbox` (`database/c3-booking/08_notifications.sql`) in the transaction of the change. `NotificationOutboxJob` sends the unsent ones to notification-service every 5 seconds with Team 6's `NotificationHandle` (copied into `notify/`, as their guide asks) and marks them sent; one Team 6 refuses or can't take is retried with growing waits, up to 20 times (`attempts`, `last_error`). The same job queues journey reminders for paid bookings 24 hours before the train leaves the boarding station (`booking.notifications.reminder-hours`). Cancelling an unpaid booking queues `BOOKING_CANCELLED`.
 
 ## Logging in
 
@@ -41,7 +48,7 @@ Dev accounts: `customer@example.com`, `staff@example.com`, `admin@example.com`, 
 
 | Method | Path | Who | What |
 |---|---|---|---|
-| GET | `/api/search?from=NDLS&to=MAS&date=2026-11-02` | anyone | Trains that stop at `from` and later at `to`, leaving `from` on `date`, with availability and fare per class. A placeholder until Team 2 builds search. |
+| GET | `/api/search?from=NDLS&to=MAS&date=2026-11-02` | anyone | Trains that stop at `from` and later at `to`, leaving `from` on `date`, with availability and fare per class, and Team 2's timetable times (`from.departure`, `to.arrival`). |
 | GET | `/api/runs/{runId}/availability?class=3A&from=NDLS&to=NGP` | anyone | Seats, RAC and waitlist per class for a journey. All parameters are optional; without `from`/`to` the whole route is used. |
 | POST | `/api/bookings` | CUSTOMER | Book and hold for 15 minutes. Returns `201` with the booking. |
 | GET | `/api/bookings/mine` | any logged-in user | The caller's bookings, newest first. |
@@ -133,11 +140,12 @@ The database raises standard SQLSTATEs, and `ApiExceptionHandler` maps them to t
 PGHOST=localhost PGUSER=postgres ./booking-service/run_tests.sh
 ```
 
-Rebuilds `railway_test` with `setup.sh --reset`, then runs 44 tests:
+Rebuilds `railway_test` with `setup.sh --reset`, then runs the tests:
 - **Token rules** (unit tests).
 - **Access rules:** who can reach which endpoint.
 - **Search and availability.**
 - **Booking flows:** confirmed, waitlisted, and promoted after a cancellation; partial and full cancellation; ownership; hold expiry; each database rule coming back as the right HTTP error.
+- **Notifications:** cancelling queues `BOOKING_CANCELLED`; delivery to a stand-in for Team 6's service, once, with the key; a refused one is kept for later.
 
 Each API test runs in a transaction that is rolled back. The tests refuse to run on a database whose name doesn't end in `_test`.
 

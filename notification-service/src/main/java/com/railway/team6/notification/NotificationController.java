@@ -1,5 +1,6 @@
 package com.railway.team6.notification;
 
+import com.railway.team6.security.Caller;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
@@ -21,8 +22,8 @@ import java.util.Map;
  * Each method reads the request, does the work, and uses NotificationRepository to
  * save to / read from MongoDB.
  *
- * Who calls what:
- *   Other teams (Spring Boot)  -> POST  /api/notifications
+ * Who calls what (SecurityConfig and Caller check it; users only see their own):
+ *   Other teams (Spring Boot)  -> POST  /api/notifications   (booking-service delivers them all)
  *   Our React frontend         -> GET   /api/notifications/user/{userId}
  *                                 GET   /api/notifications/user/{userId}/unread-count
  *                                 PATCH /api/notifications/{id}/read
@@ -86,6 +87,7 @@ public class NotificationController {
     // @PathVariable takes the {userId} part out of the URL.
     @GetMapping("/user/{userId}")
     public List<Notification> getForUser(@PathVariable String userId) {
+        Caller.requireSelfOrStaff(userId);   // only your own (staff: anyone's)
         return repository.findByUserIdOrderByCreatedAtDesc(userId);
     }
 
@@ -93,6 +95,7 @@ public class NotificationController {
     // The frontend polls this (e.g. every 15 s). If "unread" goes up, it makes the bell blink.
     @GetMapping("/user/{userId}/unread-count")
     public Map<String, Object> unreadCount(@PathVariable String userId) {
+        Caller.requireSelfOrStaff(userId);
         return Map.of("userId", userId, "unread", repository.countByUserIdAndReadFalse(userId));
     }
 
@@ -103,6 +106,7 @@ public class NotificationController {
         Notification notification = repository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "No notification with id " + id));
+        Caller.requireSelfOrStaff(notification.getUserId());
         notification.setRead(true);
         return repository.save(notification); // save() on an object that has an id = update
     }
@@ -110,6 +114,7 @@ public class NotificationController {
     // PATCH /api/notifications/user/u_123/read-all  ->  { "updated": 5 }
     @PatchMapping("/user/{userId}/read-all")
     public Map<String, Object> markAllAsRead(@PathVariable String userId) {
+        Caller.requireSelfOrStaff(userId);
         List<Notification> unread = repository.findByUserIdAndReadFalse(userId);
         unread.forEach(notification -> notification.setRead(true));
         repository.saveAll(unread);

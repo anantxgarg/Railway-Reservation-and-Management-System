@@ -9,13 +9,27 @@ our handle. We log it and show it to the user in the bell icon (top right).
 
 ---
 
-## How to call us
+## How notifications reach us in the merged project
+
+You don't need to call us yourself. Write the event to the `notification_outbox` table in PostgreSQL,
+**in the same transaction** as your own change, and booking-service delivers it to the endpoint below:
+
+```sql
+SELECT queue_notification('PAYMENT_CONFIRMED', pnr, 'team-4',
+       jsonb_build_object('razorpayPaymentId', ..., 'razorpayOrderId', ..., 'amount', ..., 'paidAt', ...));
+```
+
+The `data` object is the same as below. See `database/c3-booking/08_notifications.sql` for the
+functions and triggers that already do this for every type.
+
+## How to call us (what booking-service sends)
 
 One REST endpoint for every notification type:
 
 ```
 POST http://localhost:8086/api/notifications
 Content-Type: application/json
+X-Internal-Key: <NOTIFICATIONS_API_KEY, if set>
 ```
 
 (Our backend is this folder. `GET /api/notifications/types` lists every type and

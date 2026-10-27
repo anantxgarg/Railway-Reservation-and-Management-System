@@ -36,7 +36,7 @@ export default function AppShell() {
     };
   }, []);
 
-  const tabs = TABS.filter((t) => !t.roles || t.roles.includes(user.role));
+  const tabs = TABS.filter((t) => !t.headerWidget && (!t.roles || t.roles.includes(user.role)));
   const first = location.pathname.split('/')[1] || '';
   const current = tabs.find((t) => t.path.slice(1) === first || t.match?.includes(first));
 
@@ -77,7 +77,7 @@ export default function AppShell() {
         </AppBar>
 
         <Paper elevation={0} square sx={{ bgcolor: '#0f172a', borderBottom: '1px solid #1e293b' }}>
-          <Container maxWidth="lg">
+          <Container maxWidth="xl">
             <Tabs
               value={current ? current.path : false}
               onChange={(e, value) => nav(value)}
@@ -86,7 +86,7 @@ export default function AppShell() {
               variant="scrollable"
               scrollButtons="auto"
               sx={{
-                '& .MuiTab-root': { color: '#94a3b8', fontWeight: 600, py: 2, '&.Mui-selected': { color: '#38bdf8' } },
+                '& .MuiTab-root': { color: '#94a3b8', fontWeight: 600, py: 2, px: 1.5, minWidth: 0, '&.Mui-selected': { color: '#38bdf8' } },
                 '& .MuiTabs-indicator': { backgroundColor: '#38bdf8', height: 3, borderRadius: '3px 3px 0 0' },
               }}
             >

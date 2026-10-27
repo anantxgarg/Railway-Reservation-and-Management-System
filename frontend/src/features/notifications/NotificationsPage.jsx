@@ -33,6 +33,9 @@ function resetDemo() {
 
 // ---- The page ----
 
+// Demo buttons (fake journey, reset) are hidden unless the app is started with VITE_TEAM6_DEMO=true.
+const DEMO = import.meta.env.VITE_TEAM6_DEMO === "true";
+
 // "2026-10-21T09:00:00Z" -> "21 Oct, 02:30 pm" (in the user's own time zone)
 function formatTime(isoText) {
   return new Date(isoText).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -59,7 +62,7 @@ export default function NotificationsPage({ userId, onOpenFeedback }) {
       .then(setNotifications)
       .catch(() => setNotice({
         severity: "error",
-        text: "Cannot reach the backend. Start it with cd backend, then .\\mvnw.cmd spring-boot:run, and make sure MongoDB is running.",
+        text: "Cannot reach the notification service. Start it with cd notification-service, then ./mvnw spring-boot:run (mvnw.cmd on Windows), and make sure MongoDB is running.",
       }));
   }, [userId]);
 
@@ -123,7 +126,7 @@ export default function NotificationsPage({ userId, onOpenFeedback }) {
           <Button onClick={markAllRead} disabled={!unread}>Mark all read</Button>
         </Stack>
         {notifications.length === 0 && (
-          <Typography color="text.secondary" sx={{ py: 2 }}>No notifications yet. Use "Simulate full journey" below.</Typography>
+          <Typography color="text.secondary" sx={{ py: 2 }}>No notifications yet. Book and pay for a ticket, and updates about it appear here.</Typography>
         )}
         {notifications.map((n) => (
           <Box key={n.id} className={`notification-row ${n.read ? "" : "unread"}`}
@@ -141,12 +144,17 @@ export default function NotificationsPage({ userId, onOpenFeedback }) {
             </Box>
           </Box>
         ))}
-        <Divider sx={{ my: 3 }} />
-        <Typography fontWeight={700} sx={{ mb: 1 }}>Demo controls</Typography>
-        <Stack direction="row" flexWrap="wrap" gap={1}>
-          <Button variant="outlined" onClick={handleSimulate}>Simulate full journey (7 notifications)</Button>
-          <Button variant="outlined" color="error" onClick={handleReset}>Reset demo data</Button>
-        </Stack>
+        {/* Only when the frontend is started with VITE_TEAM6_DEMO=true and the backend with TEAM6_DEMO=true */}
+        {DEMO && (
+          <>
+            <Divider sx={{ my: 3 }} />
+            <Typography fontWeight={700} sx={{ mb: 1 }}>Demo controls</Typography>
+            <Stack direction="row" flexWrap="wrap" gap={1}>
+              <Button variant="outlined" onClick={handleSimulate}>Simulate full journey (7 notifications)</Button>
+              <Button variant="outlined" color="error" onClick={handleReset}>Reset demo data (admins)</Button>
+            </Stack>
+          </>
+        )}
       </CardContent>
     </Card>
   );

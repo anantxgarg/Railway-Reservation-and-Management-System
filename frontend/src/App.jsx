@@ -30,6 +30,15 @@ import MyPayments from './components/MyPayments';
 import Refunds from './components/Refunds';
 import Concessions from './components/Concessions';
 
+// Team 2: network
+import TrainsPage from './features/network/TrainsPage';
+
+// Team 6: notifications, feedback, live status
+import NotificationsPage from './features/notifications/NotificationsPage';
+import FeedbackPage from './features/feedback/FeedbackPage';
+import LiveStatusPage from './features/livestatus/LiveStatusPage';
+import { navigate } from './router';
+
 import './App.css';
 
 function RootRedirect() {
@@ -77,6 +86,23 @@ function WithUser({ component: Component }) {
   return <Component user={user} />;
 }
 
+function Notifications() {
+  const { user } = useAuth();
+  // a "journey completed" notification opens the feedback form for that PNR
+  return <NotificationsPage userId={String(user.userId)} onOpenFeedback={(pnr) => navigate(`/feedback/${pnr}`)} />;
+}
+
+function Feedback() {
+  const { user } = useAuth();
+  const { pnr = '' } = useParams();
+  return <FeedbackPage key={pnr} userId={String(user.userId)} pnr={pnr} />;
+}
+
+function LiveStatus() {
+  const { pnr = '' } = useParams();
+  return <LiveStatusPage key={pnr} startPnr={pnr} />;
+}
+
 function Account() {
   const { user } = useAuth();
   return user.role === 'STAFF' ? <StaffPortal /> : <CustomerPortal />;
@@ -122,6 +148,13 @@ function App() {
               />
               <Route path="/refunds" element={<WithUser component={Refunds} />} />
               <Route path="/concessions" element={<WithUser component={Concessions} />} />
+
+              <Route path="/trains" element={<WithUser component={TrainsPage} />} />
+              <Route path="/live-status" element={<LiveStatus />} />
+              <Route path="/live-status/:pnr" element={<LiveStatus />} />
+              <Route path="/notifications" element={<Notifications />} />
+              <Route path="/feedback" element={<ProtectedRoute allowedRoles={['CUSTOMER']}><Feedback /></ProtectedRoute>} />
+              <Route path="/feedback/:pnr" element={<ProtectedRoute allowedRoles={['CUSTOMER']}><Feedback /></ProtectedRoute>} />
 
               <Route
                 path="/account"

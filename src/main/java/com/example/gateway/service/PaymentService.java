@@ -145,6 +145,7 @@ public class PaymentService {
         String problem = whyNotConfirmable(booking, p);
         if (problem == null) {
             reservations.confirm(p.getPnr());
+            reservations.notifyPaymentConfirmed(p.getPnr(), paymentId, orderId, p.getAmount());   // Team 6
         } else {
             log.warn("Payment {} for PNR {} cannot confirm the booking ({}); refunding it", paymentId, p.getPnr(), problem);
             refundService.refundUnconfirmedPayment(p, problem);

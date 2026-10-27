@@ -3,6 +3,7 @@ package com.railway.team6.demo;
 import com.railway.team6.feedback.FeedbackRepository;
 import com.railway.team6.notification.NotificationHandle;
 import com.railway.team6.notification.NotificationRepository;
+import com.railway.team6.security.Caller;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.web.bind.annotation.*;
@@ -37,9 +38,10 @@ public class DemoController {
 
     // @Value("${server.port}") reads our own port (8086) so the handle knows where to send.
     public DemoController(@Value("${server.port}") int port,
+                          @Value("${team6.internal-key}") String internalKey,
                           NotificationRepository notificationRepository,
                           FeedbackRepository feedbackRepository) {
-        this.handle = new NotificationHandle("http://localhost:" + port, "team-6-demo");
+        this.handle = new NotificationHandle("http://localhost:" + port, "team-6-demo", internalKey);
         this.notificationRepository = notificationRepository;
         this.feedbackRepository = feedbackRepository;
     }
@@ -50,7 +52,8 @@ public class DemoController {
      * Then a cancellation on a second, separate PNR, so all 7 types show up.
      */
     @PostMapping("/journey")
-    public Map<String, Object> simulateJourney(@RequestParam(defaultValue = "u_demo") String userId) {
+    public Map<String, Object> simulateJourney(@RequestParam String userId) {
+        Caller.requireSelfOrStaff(userId);   // a demo journey for yourself (staff: for anyone)
         String pnr = randomPnr();
         String journeyDate = LocalDate.now().toString();          // "yyyy-MM-dd"
         String passenger = "Rahul Kumar";

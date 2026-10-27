@@ -156,7 +156,7 @@ export default function AdminPortal() {
             </div>
             <div className="meta-item">
               <span className="meta-label">Status</span>
-              <span className="detail-badge status-badge">{user?.status}</span>
+              <span className="detail-badge status-badge">{user?.status || 'ACTIVE'}</span>
             </div>
             <div className="meta-item">
               <span className="meta-label">Admin ID</span>

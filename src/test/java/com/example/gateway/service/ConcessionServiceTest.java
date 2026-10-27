@@ -67,7 +67,7 @@ class ConcessionServiceTest {
     @Test
     void applicationsAreOnlyForTheBookingOwner() {
         when(reservations.find("1000000016")).thenReturn(Optional.of(
-                new Reservation("1000000016", 5, "CONFIRMED", BigDecimal.valueOf(1000), false, LocalDate.now())));
+                new Reservation("1000000016", 5, "CONFIRMED", BigDecimal.valueOf(1000), false, LocalDate.now(), null)));
         assertThrows(ApiException.class, () -> concessionService.createApplication(
                 "1000000016", 7, 6, false, PassengerCategory.STUDENT, null, null, null));
     }
@@ -81,7 +81,7 @@ class ConcessionServiceTest {
         when(concessionRepo.save(any(ConcessionApplication.class))).thenReturn(mockApp);
         when(concessionRepo.findById(10L)).thenReturn(Optional.of(mockApp));
         when(reservations.find("1000000016")).thenReturn(Optional.of(
-                new Reservation("1000000016", 5, "CONFIRMED", BigDecimal.valueOf(1000), false, LocalDate.now())));
+                new Reservation("1000000016", 5, "CONFIRMED", BigDecimal.valueOf(1000), false, LocalDate.now(), null)));
         when(reservations.passenger("1000000016", 7)).thenReturn(Optional.of(
                 new PassengerInfo(7, "Rahul Sharma", BigDecimal.valueOf(1000), "CONFIRMED")));
 
