@@ -1,165 +1,179 @@
-import React, { useEffect, useState } from 'react';
-import {
-  AppBar, Toolbar, Typography, Box, Tabs, Tab, Container, Button, Chip, Paper
-} from '@mui/material';
-import DirectionsTransitIcon from '@mui/icons-material/DirectionsTransit';
-import AccountCircleIcon from '@mui/icons-material/AccountCircle';
-import SearchIcon from '@mui/icons-material/Search';
-import ConfirmationNumberIcon from '@mui/icons-material/ConfirmationNumber';
-import ListAltIcon from '@mui/icons-material/ListAlt';
-import ReceiptIcon from '@mui/icons-material/Receipt';
-import UndoIcon from '@mui/icons-material/Undo';
-import CardMembershipIcon from '@mui/icons-material/CardMembership';
-import SupervisorAccountIcon from '@mui/icons-material/SupervisorAccount';
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
+import { ThemeProvider } from './context/ThemeContext';
+import { AuthProvider } from './context/AuthContext';
+import { useAuth } from './context/useAuth';
+import { getRoleDestination } from './utils/roleUtils';
+import ProtectedRoute from './components/ProtectedRoute';
+import AdminRoute from './components/AdminRoute';
+import AppShell from './components/AppShell';
 
-import LoginPage from './features/auth/LoginPage';
+// Team 1: accounts
+import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import AdminLoginPage from './pages/AdminLoginPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
+import UnauthorizedPage from './pages/UnauthorizedPage';
+import CustomerPortal from './pages/destinations/CustomerPortal';
+import StaffPortal from './pages/destinations/StaffPortal';
+import AdminPortal from './pages/destinations/AdminPortal';
+
+// Team 3: booking
 import SearchPage from './features/booking/SearchPage';
 import PassengerForm from './features/booking/PassengerForm';
 import BookingPage from './features/booking/BookingPage';
 import PnrLookup from './features/booking/PnrLookup';
 import MyBookings from './features/booking/MyBookings';
+
+// Team 4: payments
 import MyPayments from './components/MyPayments';
 import Refunds from './components/Refunds';
 import Concessions from './components/Concessions';
-import { getCurrentUser, logout, setSessionEndedHandler } from './api';
-import { navigate, useRoute } from './router';
 
-// Screens by the first part of the hash (#/pnr/123 -> 'pnr').
-// Booking: Team 3. Payments, refunds, concessions: Team 4. Login: Team 1's API.
-const TABS = [
-  { route: 'search', label: 'Book', icon: <SearchIcon /> },
-  { route: 'pnr', label: 'PNR status', icon: <ConfirmationNumberIcon /> },
-  { route: 'bookings', label: 'My bookings', icon: <ListAltIcon />, customerOnly: true },
-  { route: 'payments', label: 'My payments', icon: <ReceiptIcon />, customerOnly: true },
-  { route: 'refunds', label: 'Refunds', icon: <UndoIcon /> },
-  { route: 'concessions', label: 'Concessions', icon: <CardMembershipIcon />, staffIcon: <SupervisorAccountIcon /> },
-];
+// Team 2: network
+import TrainsPage from './features/network/TrainsPage';
 
-const ROUTE_TAB = { book: 'search' };
+// Team 6: notifications, feedback, live status
+import NotificationsPage from './features/notifications/NotificationsPage';
+import FeedbackPage from './features/feedback/FeedbackPage';
+import LiveStatusPage from './features/livestatus/LiveStatusPage';
+import { navigate } from './router';
 
-export default function App() {
-  const [user, setUser] = useState(getCurrentUser);
-  const [notice, setNotice] = useState(null);
-  const route = useRoute();
+import './App.css';
 
-  useEffect(() => {
-    setSessionEndedHandler(() => {
-      setNotice('Your session has ended. Please log in again.');
-      setUser(null);
-    });
-  }, []);
+function RootRedirect() {
+  const { user, isAuthenticated, isLoading } = useAuth();
 
-  if (!user) {
+  if (isLoading) {
     return (
-      <LoginPage
-        notice={notice}
-        onLogin={(u) => {
-          setNotice(null);
-          setUser(u);
-        }}
-      />
+      <div className="auth-page-wrapper loading-center">
+        <div className="loading-card">
+          <div className="loading-spinner" aria-hidden="true"></div>
+          <div className="loading-text">Loading application...</div>
+        </div>
+      </div>
     );
   }
 
-  const isCustomer = user.role === 'CUSTOMER';
-  const tabs = TABS.filter((t) => isCustomer || !t.customerOnly);
-  const [page = 'search', ...params] = route;
-  const known = tabs.some((t) => t.route === page) || page in ROUTE_TAB;
-  const current = known ? (ROUTE_TAB[page] || page) : 'search';
-
-  let content;
-  switch (known ? page : 'search') {
-    case 'book':
-      content = <PassengerForm key={params.join('/')} params={params} />;
-      break;
-    case 'pnr':
-      content = params[0] ? <BookingPage pnr={params[0]} user={user} /> : <PnrLookup />;
-      break;
-    case 'bookings':
-      content = <MyBookings />;
-      break;
-    case 'payments':
-      content = <MyPayments user={user} />;
-      break;
-    case 'refunds':
-      content = <Refunds user={user} />;
-      break;
-    case 'concessions':
-      content = <Concessions user={user} />;
-      break;
-    default:
-      content = <SearchPage params={known ? params : []} canBook={isCustomer} />;
+  if (isAuthenticated && user) {
+    return <Navigate to={getRoleDestination(user.role)} replace />;
   }
 
+  return <Navigate to="/login" replace />;
+}
+
+// The booking screens take the URL's parts as a `params` array.
+function Search() {
+  const { user } = useAuth();
+  const { from, to, date } = useParams();
+  return <SearchPage params={from ? [from, to, date] : []} canBook={user.role === 'CUSTOMER'} />;
+}
+
+function Book() {
+  const { runId, classCode, from, to } = useParams();
+  const params = [runId, classCode, from, to];
+  return <PassengerForm key={params.join('/')} params={params} />;
+}
+
+function Pnr() {
+  const { user } = useAuth();
+  const { pnr } = useParams();
+  return pnr ? <BookingPage key={pnr} pnr={pnr} user={user} /> : <PnrLookup />;
+}
+
+function WithUser({ component: Component }) {
+  const { user } = useAuth();
+  return <Component user={user} />;
+}
+
+function Notifications() {
+  const { user } = useAuth();
+  // a "journey completed" notification opens the feedback form for that PNR
+  return <NotificationsPage userId={String(user.userId)} onOpenFeedback={(pnr) => navigate(`/feedback/${pnr}`)} />;
+}
+
+function Feedback() {
+  const { user } = useAuth();
+  const { pnr = '' } = useParams();
+  return <FeedbackPage key={pnr} userId={String(user.userId)} pnr={pnr} />;
+}
+
+function LiveStatus() {
+  const { pnr = '' } = useParams();
+  return <LiveStatusPage key={pnr} startPnr={pnr} />;
+}
+
+function Account() {
+  const { user } = useAuth();
+  return user.role === 'STAFF' ? <StaffPortal /> : <CustomerPortal />;
+}
+
+function App() {
   return (
-    <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
-      <AppBar position="static" elevation={0} sx={{ bgcolor: '#0b111e', borderBottom: '1px solid #1e293b' }}>
-        <Toolbar sx={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 1, py: 1 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <DirectionsTransitIcon sx={{ fontSize: 28, color: '#f8fafc', mr: 1.5 }} />
-            <Typography variant="h6" component="div" sx={{ fontWeight: 800, letterSpacing: '1px', color: '#f8fafc' }}>
-              RAILWAY RESERVATION
-            </Typography>
-          </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <Chip
-              icon={<AccountCircleIcon style={{ color: '#fff' }} />}
-              label={`${user.name || user.email} · ${user.role}`}
-              color={user.role === 'ADMIN' ? 'error' : user.role === 'STAFF' ? 'warning' : 'primary'}
-              sx={{ fontWeight: 600, color: '#fff', maxWidth: { xs: 220, sm: 'none' } }}
-            />
-            <Button
-              variant="outlined"
-              size="small"
-              onClick={async () => {
-                await logout();
-                setUser(null);
-                navigate('/search');
-              }}
-              sx={{ color: '#f8fafc', borderColor: '#22324e' }}
+    <ThemeProvider>
+      <BrowserRouter>
+        <AuthProvider>
+          <Routes>
+            {/* Public: Team 1's account pages */}
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/unauthorized" element={<UnauthorizedPage />} />
+            <Route path="/admin/login" element={<AdminLoginPage />} />
+
+            {/* Logged in: every team's screens inside one layout */}
+            <Route
+              element={
+                <ProtectedRoute>
+                  <AppShell />
+                </ProtectedRoute>
+              }
             >
-              Log out
-            </Button>
-          </Box>
-        </Toolbar>
-      </AppBar>
-
-      <Paper elevation={0} square sx={{ bgcolor: '#0f172a', borderBottom: '1px solid #1e293b' }}>
-        <Container maxWidth="lg">
-          <Tabs
-            value={current}
-            onChange={(e, value) => navigate(`/${value}`)}
-            textColor="secondary"
-            indicatorColor="secondary"
-            variant="scrollable"
-            scrollButtons="auto"
-            sx={{
-              '& .MuiTab-root': { color: '#94a3b8', fontWeight: 600, py: 2, '&.Mui-selected': { color: '#38bdf8' } },
-              '& .MuiTabs-indicator': { backgroundColor: '#38bdf8', height: 3, borderRadius: '3px 3px 0 0' },
-            }}
-          >
-            {tabs.map((t) => (
-              <Tab
-                key={t.route}
-                value={t.route}
-                icon={!isCustomer && t.staffIcon ? t.staffIcon : t.icon}
-                iconPosition="start"
-                label={t.label}
+              <Route path="/search" element={<Search />} />
+              <Route path="/search/:from/:to/:date" element={<Search />} />
+              <Route
+                path="/book/:runId/:classCode/:from/:to"
+                element={<ProtectedRoute allowedRoles={['CUSTOMER']}><Book /></ProtectedRoute>}
               />
-            ))}
-          </Tabs>
-        </Container>
-      </Paper>
+              <Route path="/pnr" element={<Pnr />} />
+              <Route path="/pnr/:pnr" element={<Pnr />} />
+              <Route
+                path="/bookings"
+                element={<ProtectedRoute allowedRoles={['CUSTOMER']}><MyBookings /></ProtectedRoute>}
+              />
+              <Route
+                path="/payments"
+                element={<ProtectedRoute allowedRoles={['CUSTOMER']}><WithUser component={MyPayments} /></ProtectedRoute>}
+              />
+              <Route path="/refunds" element={<WithUser component={Refunds} />} />
+              <Route path="/concessions" element={<WithUser component={Concessions} />} />
 
-      <Container maxWidth="lg" sx={{ flexGrow: 1, py: 3 }}>
-        {content}
-      </Container>
+              <Route path="/trains" element={<WithUser component={TrainsPage} />} />
+              <Route path="/live-status" element={<LiveStatus />} />
+              <Route path="/live-status/:pnr" element={<LiveStatus />} />
+              <Route path="/notifications" element={<Notifications />} />
+              <Route path="/feedback" element={<ProtectedRoute allowedRoles={['CUSTOMER']}><Feedback /></ProtectedRoute>} />
+              <Route path="/feedback/:pnr" element={<ProtectedRoute allowedRoles={['CUSTOMER']}><Feedback /></ProtectedRoute>} />
 
-      <Box sx={{ py: 2.5, textAlign: 'center', bgcolor: '#0b111e', borderTop: '1px solid #1e293b', mt: 'auto' }}>
-        <Typography variant="body2" sx={{ color: '#64748b', fontSize: '0.85rem' }}>
-          Railway Reservation and Management System
-        </Typography>
-      </Box>
-    </Box>
+              <Route
+                path="/account"
+                element={<ProtectedRoute allowedRoles={['CUSTOMER', 'STAFF']}><Account /></ProtectedRoute>}
+              />
+              <Route path="/admin" element={<AdminRoute><AdminPortal /></AdminRoute>} />
+
+              {/* Old portal addresses from Team 1's first version */}
+              <Route path="/customer" element={<Navigate to="/search" replace />} />
+              <Route path="/staff" element={<Navigate to="/search" replace />} />
+            </Route>
+
+            <Route path="/" element={<RootRedirect />} />
+            <Route path="*" element={<RootRedirect />} />
+          </Routes>
+        </AuthProvider>
+      </BrowserRouter>
+    </ThemeProvider>
   );
 }
+
+export default App;

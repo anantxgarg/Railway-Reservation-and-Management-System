@@ -1,0 +1,121 @@
+### Demo requests for the Team 6 backend.
+### Open in VS Code with the "REST Client" extension, then click "Send Request" above a block.
+### Start the backend first:  cd notification-service  ->  .\mvnw.cmd spring-boot:run
+
+@base = http://localhost:8086/api
+@user = 1
+### Log in as the user (or admin@example.com for /demo/reset and sending by hand), copy the "token":
+###   POST http://localhost:3000/api/auth/login  {"email":"customer@example.com","password":"Railway@Dev123"}
+### The demo URLs need TEAM6_DEMO=true.
+@token = paste-the-token-here
+
+### 0. (Optional) Start from an empty database
+DELETE {{base}}/demo/reset
+Authorization: Bearer {{token}}
+
+### 1. Fake a whole journey: sends all 7 notification types. Copy the "pnr" from the reply into @pnr below.
+POST {{base}}/demo/journey?userId={{user}}
+Authorization: Bearer {{token}}
+
+### 2. Unread count: what the bell icon polls (should be 7)
+GET {{base}}/notifications/user/{{user}}/unread-count
+Authorization: Bearer {{token}}
+
+### 3. The user's notifications, newest first
+GET {{base}}/notifications/user/{{user}}
+Authorization: Bearer {{token}}
+
+### 4. What the other teams must send for each type
+GET {{base}}/notifications/types
+Authorization: Bearer {{token}}
+
+### 5. Send one notification by hand, the way another team would
+POST {{base}}/notifications
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "type": "BOOKING_CONFIRMED",
+  "userId": "{{user}}",
+  "pnr": "4567891234",
+  "sourceTeam": "team-2",
+  "eventTime": "2026-10-21T14:30:00",
+  "data": {
+    "trainNumber": "12301",
+    "trainName": "Rajdhani Express",
+    "journeyDate": "2026-12-15",
+    "fromStation": "NDLS",
+    "toStation": "BCT",
+    "travelClass": "3A",
+    "passengerCount": 2,
+    "bookingStatus": "CNF"
+  }
+}
+
+### 6. Same, but with a field missing: shows the 400 error message
+POST {{base}}/notifications
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "type": "WL_TO_RAC",
+  "userId": "{{user}}",
+  "pnr": "4567891234",
+  "sourceTeam": "team-2",
+  "eventTime": "2026-10-21T14:30:00",
+  "data": { "passengerName": "Rahul Kumar" }
+}
+
+### 7. Mark everything as read (bell stops blinking)
+PATCH {{base}}/notifications/user/{{user}}/read-all
+Authorization: Bearer {{token}}
+
+# ---------------- Feedback ----------------
+# Paste the pnr from step 1 here:
+@pnr = 9530993942
+
+### 8. Feedback form: journey details for the top card
+GET {{base}}/feedback/form?userId={{user}}&pnr={{pnr}}
+Authorization: Bearer {{token}}
+
+### 9. Submit feedback (foodQuality left out = "not applicable")
+POST {{base}}/feedback
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "userId": "{{user}}",
+  "pnr": "{{pnr}}",
+  "ratings": {
+    "washroomCleanliness": 6,
+    "coachCleaning": 6,
+    "electricalAppliances": 3,
+    "seatMaterialQuality": 7,
+    "bedsheetBlanket": 8
+  },
+  "comment": "AC was too cold."
+}
+
+### 10. Submit again: 409 Conflict (only one feedback per journey)
+POST {{base}}/feedback
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "userId": "{{user}}",
+  "pnr": "{{pnr}}",
+  "ratings": { "washroomCleanliness": 9, "coachCleaning": 9, "electricalAppliances": 9,
+               "seatMaterialQuality": 9, "bedsheetBlanket": 9 }
+}
+
+### 11. Average ratings: all trains, then one train
+GET {{base}}/feedback/summary
+Authorization: Bearer {{token}}
+
+###
+GET {{base}}/feedback/summary?trainNumber=12301
+Authorization: Bearer {{token}}
+
+### 12. Admin: every notification ever received
+GET {{base}}/notifications/log
+Authorization: Bearer {{token}}

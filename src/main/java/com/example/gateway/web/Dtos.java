@@ -1,6 +1,7 @@
 package com.example.gateway.web;
 
 import com.example.gateway.domain.*;
+import com.example.gateway.repo.ConcessionRuleRepository;
 import jakarta.validation.constraints.*;
 
 import java.math.BigDecimal;
@@ -13,16 +14,31 @@ public final class Dtos {
     }
 
     // ---------- Concession ----------
+    /** percent is null for a FIXED_AMOUNT concession. */
     public record ConcessionResult(
-            PassengerCategory category, BigDecimal baseFare, BigDecimal percent,
+            String category, BigDecimal baseFare, BigDecimal percent,
             BigDecimal concessionAmount, BigDecimal finalAmount) {
     }
 
-    /** A concession claim for one passenger of a booking (C3 passenger_id). */
+    /** A concession from the shared concession_rule table (C3), for the booking form. */
+    public record ConcessionRuleResponse(
+            int concessionId, String category, String name, String eligibility,
+            String discountType, BigDecimal discountValue, Integer minAge, Integer maxAge, String description) {
+
+        public static ConcessionRuleResponse from(ConcessionRuleRepository.Rule r) {
+            return new ConcessionRuleResponse(r.concessionId(), r.category(), r.name(), r.eligibility(),
+                    r.discountType(), r.discountValue(), r.minAge(), r.maxAge(), r.description());
+        }
+    }
+
+    /**
+     * Documents for the concession a passenger of a booking (C3 passenger_id) was
+     * booked with. category is optional; when given it must be that concession.
+     */
     public record ApplyConcessionRequest(
             @NotBlank String pnr,
             @NotNull Integer passengerId,
-            @NotNull PassengerCategory category,
+            String category,
             String idCardType,
             String idCardNumber,
             String documentReferenceUrl) {
@@ -35,7 +51,7 @@ public final class Dtos {
 
     public record ConcessionApplicationResponse(
             Long id, String pnr, Integer passengerId, Integer userId, String passengerName,
-            PassengerCategory category, String idCardType, String idCardNumber,
+            String category, String idCardType, String idCardNumber,
             String documentReferenceUrl, BigDecimal discountPercent, BigDecimal discountAmount,
             ConcessionStatus status, Integer verifiedByStaffId, String remarks,
             OffsetDateTime createdAt, OffsetDateTime updatedAt) {

@@ -100,8 +100,9 @@ BEGIN
     SELECT * INTO v_run FROM train_run WHERE run_id = p_run_id;
     IF NOT FOUND THEN
         RAISE EXCEPTION 'train run % not found', p_run_id USING ERRCODE = 'no_data_found';
-    ELSIF v_run.status = 'CANCELLED' THEN
-        RAISE EXCEPTION 'train run % is cancelled', p_run_id USING ERRCODE = 'object_not_in_prerequisite_state';
+    ELSIF v_run.status IN ('CANCELLED', 'ARRIVED') THEN
+        -- run status is Team 2's (train-service); DEPARTED still takes bookings for later stops
+        RAISE EXCEPTION 'train run % is %', p_run_id, lower(v_run.status) USING ERRCODE = 'object_not_in_prerequisite_state';
     END IF;
     IF journey_date(p_run_id, p_from_seq) < CURRENT_DATE THEN
         RAISE EXCEPTION 'the train has already left stop %', p_from_seq USING ERRCODE = 'object_not_in_prerequisite_state';
@@ -129,6 +130,15 @@ BEGIN
         SELECT * FROM jsonb_to_recordset(p_passengers)
             AS t(name TEXT, age INTEGER, gender TEXT, concession_id INTEGER)
     LOOP
+        -- a concession's age limits (concession_rule, Team 4); documents are checked by staff
+        IF x.concession_id IS NOT NULL AND EXISTS (
+               SELECT 1 FROM concession_rule
+               WHERE concession_id = x.concession_id
+                 AND (x.age < min_age OR x.age > max_age)) THEN
+            RAISE EXCEPTION 'passenger % (age %) is not eligible for the % concession', x.name, x.age,
+                (SELECT concession_name FROM concession_rule WHERE concession_id = x.concession_id)
+                USING ERRCODE = 'invalid_parameter_value';
+        END IF;
         v_fare := calc_fare(p_run_id, p_class_code, p_quota_code, p_from_seq, p_to_seq, x.concession_id);
 
         -- every passenger starts on the waitlist, then moves up if possible

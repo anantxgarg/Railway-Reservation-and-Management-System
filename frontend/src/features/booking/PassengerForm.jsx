@@ -9,18 +9,23 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { bookingApi } from '../../api';
 import { navigate } from '../../router';
 import { GENDERS, availabilityLabel, formatDate, rupees } from './format';
+import { ageProblem, concessionLabel, useConcessionRules } from './concessions';
 
 export const MAX_PASSENGERS = 6;
 
-const emptyPassenger = () => ({ name: '', age: '', gender: '' });
+const emptyPassenger = () => ({ name: '', age: '', gender: '', concessionId: '' });
 
 /**
  * Passenger details for one train, class and journey
  * (#/book/{runId}/{class}/{from}/{to}). Submitting books and holds the seats
  * for 15 minutes, then opens the booking to review and pay.
  *
- * The database checks every value again (age 1-120, gender, ...) and its
- * message is shown if it refuses one.
+ * A passenger may be booked with a concession (Team 4's list); the fare is
+ * reduced when the seats are held, and the documents for it are sent from
+ * the Concessions screen.
+ *
+ * The database checks every value again (age 1-120, gender, a concession's
+ * ages, ...) and its message is shown if it refuses one.
  */
 export default function PassengerForm({ params }) {
   const [runId, classCode, from, to] = params;
@@ -29,6 +34,7 @@ export default function PassengerForm({ params }) {
   const [passengers, setPassengers] = useState([emptyPassenger()]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const concessions = useConcessionRules();
 
   useEffect(() => {
     let current = true;
@@ -53,7 +59,12 @@ export default function PassengerForm({ params }) {
         classCode,
         from,
         to,
-        passengers: passengers.map((p) => ({ name: p.name.trim(), age: Number(p.age), gender: p.gender })),
+        passengers: passengers.map((p) => ({
+          name: p.name.trim(),
+          age: Number(p.age),
+          gender: p.gender,
+          concessionId: p.concessionId === '' ? null : Number(p.concessionId),
+        })),
       });
       navigate(`/pnr/${booking.pnr}`);
     } catch (err) {
@@ -113,26 +124,43 @@ export default function PassengerForm({ params }) {
             </Typography>
             {passengers.map((p, i) => (
               <Grid container spacing={2} key={i} sx={{ mb: 1 }} alignItems="center">
-                <Grid item xs={12} sm={6} md={5}>
+                <Grid item xs={12} sm={6} md={4}>
                   <TextField
                     fullWidth required size="small" label={`Passenger ${i + 1} name`}
                     value={p.name} onChange={(e) => update(i, 'name', e.target.value)}
                     inputProps={{ maxLength: 100 }}
                   />
                 </Grid>
-                <Grid item xs={4} sm={2}>
+                <Grid item xs={4} sm={2} md={1.5}>
                   <TextField
                     fullWidth required size="small" label="Age" type="number"
                     value={p.age} onChange={(e) => update(i, 'age', e.target.value)}
                     inputProps={{ min: 1, max: 120 }}
                   />
                 </Grid>
-                <Grid item xs={6} sm={3}>
+                <Grid item xs={8} sm={4} md={2}>
                   <TextField
                     select fullWidth required size="small" label="Gender"
                     value={p.gender} onChange={(e) => update(i, 'gender', e.target.value)}
                   >
                     {GENDERS.map((g) => <MenuItem key={g.value} value={g.value}>{g.label}</MenuItem>)}
+                  </TextField>
+                </Grid>
+                <Grid item xs={10} sm={11} md={3.5}>
+                  <TextField
+                    select fullWidth size="small" label="Concession"
+                    value={p.concessionId} onChange={(e) => update(i, 'concessionId', e.target.value)}
+                    disabled={!concessions.length}
+                  >
+                    <MenuItem value="">None</MenuItem>
+                    {concessions.map((c) => {
+                      const problem = ageProblem(c, p.age);
+                      return (
+                        <MenuItem key={c.concessionId} value={c.concessionId} disabled={!!problem}>
+                          {concessionLabel(c)}{problem ? ` · ${problem}` : ''}
+                        </MenuItem>
+                      );
+                    })}
                   </TextField>
                 </Grid>
                 <Grid item xs={2} sm={1}>
@@ -171,6 +199,10 @@ export default function PassengerForm({ params }) {
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               The seats are held for 15 minutes while you pay. Passengers who don't get a berth go on RAC or the
               waitlist, as shown above.
+              {passengers.some((p) => p.concessionId !== '') && (
+                <> Concessions are taken off the fare when the seats are held; send the documents for them from
+                  the Concessions tab, where staff check them.</>
+              )}
             </Typography>
             <Divider sx={{ mb: 2 }} />
             <Button type="submit" variant="contained" size="large" fullWidth disabled={submitting}>

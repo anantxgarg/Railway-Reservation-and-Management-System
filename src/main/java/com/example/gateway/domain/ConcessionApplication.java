@@ -25,8 +25,8 @@ public class ConcessionApplication {
     private Integer userId;
     private String passengerName;
 
-    @Enumerated(EnumType.STRING)
-    private PassengerCategory category;
+    /** concession_rule.category of the concession the passenger was booked with, e.g. STUDENT. */
+    private String category;
 
     private String idCardType;
     private String idCardNumber;

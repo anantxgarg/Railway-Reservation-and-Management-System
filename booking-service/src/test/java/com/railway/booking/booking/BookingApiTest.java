@@ -342,6 +342,35 @@ class BookingApiTest extends ApiTestBase {
                 .andExpect(status().isUnprocessableEntity());
     }
 
+    private int concessionId(String category) {
+        return jdbc.queryForObject("SELECT concession_id FROM concession_rule WHERE category = ?", Integer.class, category);
+    }
+
+    @Test
+    void concessionLowersThatPassengersFare() throws Exception {
+        postBooking(CUSTOMER, request(runId("12127", 6), "2S", "CSMT", "PUNE", """
+                [{"name": "A", "age": 65, "gender": "F", "concessionId": %d},
+                 {"name": "B", "age": 30, "gender": "M"}]""".formatted(concessionId("SENIOR_CITIZEN"))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.passengers[0].concessionId").value(concessionId("SENIOR_CITIZEN")))
+                .andExpect(jsonPath("$.passengers[1].concessionId").value(nullValue()))
+                .andExpect(result -> {
+                    var json = JsonPath.parse(result.getResponse().getContentAsString());
+                    double senior = json.read("$.passengers[0].fare", Double.class);
+                    double general = json.read("$.passengers[1].fare", Double.class);
+                    org.junit.jupiter.api.Assertions.assertTrue(senior < general, senior + " < " + general);
+                });
+    }
+
+    @Test
+    void concessionAgeLimits() throws Exception {
+        postBooking(CUSTOMER, request(runId("12127", 6), "2S", "CSMT", "PUNE",
+                "[{\"name\": \"A\", \"age\": 30, \"gender\": \"M\", \"concessionId\": %d}]"
+                        .formatted(concessionId("SENIOR_CITIZEN"))))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.error.message").value(containsString("not eligible for the Senior Citizen concession")));
+    }
+
     @Test
     void trainsThatHaveLeftCannotBeBooked() throws Exception {
         // the dev data only has runs from today on

@@ -1,44 +1,56 @@
 # Railway Reservation & Management System
 
-Full-stack Railway Reservation & Management System featuring ticket booking, PNR generation, seat inventory, payments, live train status, notifications, analytics, and role-based access control (RBAC).
+Full-stack Railway Reservation & Management System featuring ticket booking, PNR generation, seat inventory, payments, live train status, notifications, feedback and role-based access control (RBAC). Every team's work runs as one system: one login, one shared database, one frontend.
 
 ---
 
 ## Architecture & Team Modules
 
-| Team | Module | Responsibility | Tech Stack | Status |
+| Team | Module | Responsibility | Tech Stack | Folder |
 |---|---|---|---|---|
-| **Team 1** | Users & Auth | Authentication, JWT & refresh tokens, RBAC, password reset, audit logging, identity database | Node.js, Express, PostgreSQL, MongoDB, Brevo API | Backend & database implemented; frontend pending (Team 3 added a minimal login page to replace) |
-| **Team 2** | Trains, Stations, Routes | Master train catalog, stations, routes, schedules, coaches, seat layouts | TBD | Not started |
-| **Team 3** | Booking, PNR, Seats | Booking management, PNR generation, seat allocation, waitlist | PostgreSQL, Spring Boot, React + MUI | Database, API and booking screens implemented & tested |
-| **Team 4** | Payments & Refunds | Razorpay payment gateway integration, concession calculations, refund policies | Spring Boot, Razorpay, React + MUI | Implemented |
-| **Team 5** | Reports & Analytics | Reports, analytics, admin dashboards | TBD | Not started |
-| **Team 6** | Notifications, Status, Feedback | Email / SMS notifications, live train status, feedback | TBD | Not started |
+| **Team 1** | Users & Auth | Authentication, JWT & refresh tokens, RBAC, password reset, audit logging; login, registration and admin pages | Node.js, Express, PostgreSQL, MongoDB, Brevo API, React | `backend/`, `database/c1-identity/`, `frontend/src/pages/` |
+| **Team 2** | Trains, Stations, Routes | Stations, trains, routes and timetables, weekly schedules, dated runs with status and delay, coaches and seats, live train status | Spring Boot, PostgreSQL, React | `train-service/`, `database/c2-network/`, `frontend/src/features/network/` |
+| **Team 3** | Booking, PNR, Seats | Search, booking, PNR generation, seat allocation, RAC and waitlist, cancellation | Spring Boot, PostgreSQL, React | `booking-service/`, `database/c3-booking/`, `frontend/src/features/booking/` |
+| **Team 4** | Payments & Refunds | Razorpay payments, refund policy, concessions | Spring Boot, Razorpay, React | repo root (`src/`, `pom.xml`), `frontend/src/components/` |
+| **Team 5** | Reports & Analytics | Reports, analytics, admin dashboards | TBD | Not started (`v_user_bookings`, `notification_outbox` and Team 6's feedback summary are ready to report on) |
+| **Team 6** | Notifications, Status, Feedback | Notifications, live train status page, journey feedback | Spring Boot, MongoDB, React | `notification-service/`, `frontend/src/features/{notifications,feedback,livestatus}/` |
+
+**How the teams connect**
+
+- **One login.** Team 1 issues JWTs; every other backend verifies them with the same `JWT_SECRET`, so a user logs in once.
+- **One PostgreSQL database**, `railway`, built by `database/setup.sh` in dependency order: C1 identity → C2 network → C3 booking; Team 4's tables come from its Flyway migrations. Team 6 keeps notifications and feedback in MongoDB.
+- **Network → booking.** Booking (C3) books seats on Team 2's runs, routes and coaches, and refuses runs Team 2 marks `CANCELLED` or `ARRIVED`. Search shows Team 2's timetable times.
+- **Booking → payments.** Payments charges `booking.total_fare` and confirms the booking (`confirm_booking`) in the same transaction; refunds cancel passengers (`cancel_passengers`) in the same transaction as the refund, with the refund window measured from Team 2's departure time.
+- **Everyone → notifications.** Events go into `notification_outbox` in the same transaction as the change: paid bookings and waitlist/RAC promotions (C3 triggers), payments and refunds (Team 4), cancellations and journey reminders (Team 3), completed journeys (Team 2, when staff mark a run `ARRIVED`). booking-service delivers them to Team 6 with Team 6's `NotificationHandle`; a "journey completed" notification opens Team 6's feedback form.
+- **Live status.** Team 6's page shows Team 2's `GET /api/live-status/pnr/{pnr}`: timetable plus the delay staff report.
+- **One frontend.** A single React app; Team 1's routing and session handling are the shell, every team's screens are tabs in it.
 
 ---
 
 ## Running everything
 
-Three backends, one shared PostgreSQL database and one React app. In development the app's dev server forwards each `/api` path to the backend that owns it, so the browser only talks to http://localhost:5173.
+Five backends, one PostgreSQL database, one MongoDB and one React app. In development the app's dev server forwards each `/api` path to the backend that owns it, so the browser only talks to http://localhost:5173.
 
 | Service | Folder | Port | Owns |
 |---|---|---|---|
 | Users & Auth (Team 1) | `backend/` | 3000 (`PORT`) | `/api/auth`, `/api/users`, `/api/admin` |
-| Booking (Team 3) | `booking-service/` | 8082 (`BOOKING_PORT`) | `/api/search`, `/api/runs`, `/api/bookings` |
 | Payments (Team 4) | repo root | 8081 (`PAYMENTS_PORT`) | `/api/payments`, `/api/refunds`, `/api/concessions` |
+| Booking (Team 3) | `booking-service/` | 8082 (`BOOKING_PORT`) | `/api/search`, `/api/runs`, `/api/bookings` |
+| Trains (Team 2) | `train-service/` | 8083 (`TRAIN_PORT`) | `/api/trains`, `/api/stations`, `/api/travel-classes`, `/api/coaches`, `/api/routes`, `/api/route-stations`, `/api/schedules`, `/api/live-status` |
+| Notifications (Team 6) | `notification-service/` | 8086 (`NOTIFICATIONS_PORT`) | `/api/notifications`, `/api/feedback`, `/api/demo` |
 | Frontend (all teams) | `frontend/` | 5173 | the screens |
 
 ### Prerequisites
 
 - **PostgreSQL 14+**, with `psql` on the `PATH` (`setup.sh` uses it).
+- **MongoDB 6+**, for Team 6's notifications and feedback. Team 1 also writes its audit log there when it can (optional for Team 1).
 - **Node.js 18+**, for Team 1's backend and the frontend.
-- **Java 17.** Maven is not needed: both Spring Boot apps have a `./mvnw` wrapper (`mvnw.cmd` on Windows).
-- **MongoDB 6+** is optional. Team 1 writes its audit log there; without it, logins still work and audit logging is skipped.
+- **Java 17+.** Maven is not needed: every Spring Boot app has a `./mvnw` wrapper (`mvnw.cmd` on Windows).
 - **Razorpay test-mode keys**, to take payments (Team 4, see below).
 
 ### 1. Build the shared database
 
-All teams share one database, `railway`. `database/setup.sh` builds it from each team's SQL in dependency order: C1 identity, then C3 booking, with development data (users, a sample network of trains and runs for the next 30 days).
+All teams share one database, `railway`. `database/setup.sh` builds it from each team's SQL in dependency order: C1 identity, C2 network, C3 booking, with development data (users, 6 trains with runs for the next 30 days).
 
 ```bash
 PGHOST=localhost PGUSER=postgres PGPASSWORD=... ./database/setup.sh            # create and fill "railway"
@@ -51,54 +63,65 @@ Team 4's tables are created by the payments app itself (Flyway) the first time i
 
 | Variable | Used by | Value |
 |---|---|---|
-| `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD` | `setup.sh` and all three backends | The same everywhere. Defaults: `localhost`, `5432`, `railway`, `postgres` |
-| `JWT_SECRET` | all three backends | **One shared secret**, at least 32 characters. Team 1 signs logins with it; booking and payments check the tokens with it |
-| `MONGO_URI` | Team 1 | e.g. `mongodb://localhost:27017/railway` |
+| `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD` | `setup.sh` and every PostgreSQL backend | The same everywhere. Defaults: `localhost`, `5432`, `railway`, `postgres` |
+| `JWT_SECRET` | all five backends | **One shared secret**, at least 32 characters. Team 1 signs logins with it; the others check the tokens with it |
+| `NOTIFICATIONS_API_KEY` | booking-service and notification-service | Any string, the same for both; booking-service sends it when delivering notifications. Leave unset in development to skip the check |
+| `TEAM6_MONGO_URI` | notification-service | Default `mongodb://localhost:27017/team6_railway` |
+| `MONGO_URI` | Team 1 | e.g. `mongodb://localhost:27017/railway` (audit log) |
 | `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | payments | Razorpay test-mode keys; the webhook secret is any string you also enter in the Razorpay dashboard |
-| `PORT`, `BOOKING_PORT`, `PAYMENTS_PORT` | Team 1, booking, payments | Only to change the ports above |
-| `AUTH_URL`, `BOOKING_URL`, `PAYMENTS_URL` | frontend dev server | Only when a backend isn't on its default port, e.g. `PAYMENTS_URL=http://localhost:8091` |
+| `PORT`, `PAYMENTS_PORT`, `BOOKING_PORT`, `TRAIN_PORT`, `NOTIFICATIONS_PORT` | the backends | Only to change the ports above |
+| `NOTIFICATIONS_URL` | booking-service (and the frontend dev server) | Where notification-service runs, default `http://localhost:8086` |
+| `AUTH_URL`, `BOOKING_URL`, `PAYMENTS_URL`, `TRAIN_URL`, `NOTIFICATIONS_URL` | frontend dev server | Only when a backend isn't on its default port, e.g. `PAYMENTS_URL=http://localhost:8091` |
 
 Team 1 reads `backend/.env` (copy `backend/.env.example`; see Team 1 below). The Spring Boot apps and the frontend read the environment.
 
-Generate a secret once and use it for all three: `node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"`
+Generate a secret once and use it for all of them: `node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"`
 
 ### 3. Start the services
 
-Each in its own terminal, after step 1. The backends don't depend on each other at startup, but the payments app needs the booking tables.
+Each in its own terminal, after step 1. The backends don't depend on each other at startup, but the payments app needs the booking tables, and notifications wait in the database until notification-service is up.
 
 ```bash
 # shared by the terminals below
 export PGHOST=localhost PGUSER=postgres PGPASSWORD=...
 export JWT_SECRET=<the shared secret>
+export NOTIFICATIONS_API_KEY=<any string>
 
 cd backend && npm ci && npm start                      # Team 1, :3000 (reads backend/.env)
+cd train-service && ./mvnw spring-boot:run             # Team 2, :8083
 cd booking-service && ./mvnw spring-boot:run           # Team 3, :8082
 RAZORPAY_KEY_ID=rzp_test_... RAZORPAY_KEY_SECRET=... RAZORPAY_WEBHOOK_SECRET=... \
   ./mvnw spring-boot:run                               # Team 4, :8081, from the repo root
+cd notification-service && ./mvnw spring-boot:run      # Team 6, :8086 (needs MongoDB)
 cd frontend && npm ci && npm run dev                   # :5173
 ```
 
 On Windows use `mvnw.cmd`, and `set NAME=value` instead of `export`.
 
-Open http://localhost:5173 and log in as `customer@example.com` with password `Railway@Dev123` (`staff@` and `admin@example.com` too). Book a ticket from `NDLS` to `MAS`, `BCT` or `NGP` on any of the next 30 days, then pay with Razorpay's test card `4111 1111 1111 1111`.
+Open http://localhost:5173 and log in as `customer@example.com` with password `Railway@Dev123` (`staff@` and `admin@example.com` too). Book a ticket from `NDLS` to `MAS`, `BCT` or `NGP`, or between `PUNE`, `CSMT`, `SUR` and `UBL`, on any of the next 30 days, then pay with Razorpay's test card `4111 1111 1111 1111`. The bell shows the notifications. As `staff@example.com`, the Trains tab sets a run's status and delay: live status follows, and marking a run `ARRIVED` asks its passengers for feedback.
 
 ### Tests
 
 | Suite | Command | Database |
 |---|---|---|
 | Team 1 unit | `cd backend && npm test` | none |
-| Team 1 database | `cd backend && npm run test:db` | `railway_test` |
+| Team 1 database | `PGDATABASE=railway_test ./database/setup.sh --reset && cd backend && npm run test:db` | `railway_test` |
+| C2 network database | `./database/c2-network/tests/run_tests.sh` | creates and drops `railway_c2_test` |
+| Train API | `./train-service/run_tests.sh` | rebuilds `railway_test` |
 | C3 database | `./database/c3-booking/tests/run_tests.sh` | creates and drops `railway_c3_test` |
 | Booking API | `./booking-service/run_tests.sh` | rebuilds `railway_test` |
 | Payments | `PGDATABASE=railway_test ./database/setup.sh --reset && ./mvnw test` | `railway_test` |
+| Notifications | `cd notification-service && ./mvnw test` | MongoDB `team6_test` (`TEAM6_TEST_MONGO_URI`, default `mongodb://localhost:27017/team6_test`) |
+| Frontend | `cd frontend && npm run build` | none |
 
-All need the `PG*` variables. None of them touch `railway`. Razorpay is mocked in the payments tests, so they need no keys. Several suites rebuild `railway_test`, so run them one at a time.
+The PostgreSQL suites need the `PG*` variables; none of them touch `railway`. Razorpay is mocked in the payments tests, so they need no keys. Several suites rebuild `railway_test`, so run them one at a time. CI (`.github/workflows/ci.yml`) runs all of them on every pull request.
 
 ### Troubleshooting
 
-- **Every call to booking or payments returns 401 after logging in.** The backends don't share the same `JWT_SECRET`.
+- **Every call to the Spring Boot services returns 401 after logging in.** The backends don't share the same `JWT_SECRET`.
 - **The payments app stops at startup with a Flyway error about `booking`.** The shared database hasn't been built yet; run step 1 first.
 - **Port 8081 (or another) is already in use.** Start the app on another port (`PAYMENTS_PORT=8091`) and tell the frontend (`PAYMENTS_URL=http://localhost:8091 npm run dev`).
+- **No notifications arrive.** Check notification-service is running and MongoDB is up, and that `NOTIFICATIONS_API_KEY` is the same for booking-service and notification-service. Undelivered ones wait in `notification_outbox` (`last_error` says why) and are retried.
 - **The `booking` foreign key to `users` disappeared.** Team 1's `schema.sql` drops `users` with `CASCADE`. Rebuild everything with `setup.sh --reset` instead of rerunning one team's files.
 
 ---
@@ -109,6 +132,8 @@ The authentication backend provides secure user identity management, credential 
 
 Detailed API specifications, request/response schemas, and error codes are documented in [`docs/API.md`](docs/API.md).
 Database schemas and role-permission matrices are documented in [`database/c1-identity/README.md`](database/c1-identity/README.md).
+
+Team 1's pages (login, registration, forgot/reset password, admin login, account and admin portals) and the app's routing and session handling are in the shared [`frontend/`](frontend/README.md) (`src/pages`, `src/context`, `src/services`). Every other backend accepts the tokens issued here. Integration notes: [`docs/team-1-integration-handover.md`](docs/team-1-integration-handover.md).
 
 ### Prerequisites
 
@@ -218,6 +243,7 @@ All request bodies and responses use JSON (`Content-Type: application/json`).
 |---|---|---|---|
 | `POST` | `/api/auth/register` | Public | Register new `CUSTOMER` account with bcrypt hash |
 | `POST` | `/api/auth/login` | Public | Authenticate with email/password; returns access & refresh tokens |
+| `POST` | `/api/auth/admin-login` | Public | Same check, but only an `ACTIVE` `ADMIN` gets tokens (admin portal) |
 | `GET` | `/api/auth/me` | Authenticated | Retrieve profile for authenticated user (`req.user`) |
 | `POST` | `/api/auth/logout` | Authenticated | Revoke refresh token and terminate session |
 | `POST` | `/api/auth/refresh` | Public | Rotate refresh token and issue new access token pair |
@@ -242,10 +268,33 @@ Configured in `database/c1-identity/seed_dev_users.sql` (all use password: `Rail
 
 ---
 
+## Team 2 — Trains, Stations & Routes
+
+The railway network: stations, trains, routes with their timetable, weekly schedules, dated runs with status and delay, coaches and seats, and live train status.
+- **Database:** [`database/c2-network/`](database/c2-network/README.md) is the shared network schema every team uses (it replaced Team 3's placeholder copy), with Team 2's functions (`get_route_distance`, `calculate_fare`, `stop_departure_at`, ...), trigger and views. Columns and rules: [data dictionary](database/c2-network/DATA_DICTIONARY.md).
+- **API:** [`train-service/`](train-service/README.md), Spring Boot on port 8083. Reading is public; staff set run status and delay; admins change the network. It accepts Team 1's login tokens, so it needs the same `JWT_SECRET`.
+- **Screens:** the Trains tab of the [frontend](frontend/README.md) (`src/features/network/`): timetables for everyone, the day's runs for staff.
+
+```bash
+cd train-service && PGHOST=localhost PGUSER=postgres JWT_SECRET=<Team 1's secret> ./mvnw spring-boot:run
+```
+
+Tests:
+
+```bash
+PGHOST=localhost PGUSER=postgres ./database/c2-network/tests/run_tests.sh   # database; builds and drops railway_c2_test
+PGHOST=localhost PGUSER=postgres ./train-service/run_tests.sh             # API; rebuilds railway_test
+```
+
+The first version of train-service connected to a hosted (Neon) database with its password in the code. That password is still in the `team2` branch's history and must be **rotated** in the Neon console; the service now uses the shared database through the `PG*` variables.
+
+---
+
 ## Team 3 — Booking, PNR & Seats
 
 Search, availability, booking, PNR status and cancellation, with seat allocation, RAC and waitlist.
-- **Database:** [`database/c3-booking/`](database/c3-booking/README.md) holds the tables, triggers, procedures and views where the booking rules live. It also has placeholder copies of the network tables (Team 2) and `concession_rule` (Team 4) until those teams take them over.
+- **Database:** [`database/c3-booking/`](database/c3-booking/README.md) holds the tables, triggers, procedures and views where the booking rules live, on top of Team 2's network tables. Its `concession_rule` table is Team 4's list of concessions, applied at booking. `08_notifications.sql` is the notification outbox for Team 6.
+- **Notifications:** booking-service delivers `notification_outbox` to Team 6's notification-service every few seconds (with Team 6's `NotificationHandle`), and queues journey reminders 24 hours before departure. Set `NOTIFICATIONS_URL` and `NOTIFICATIONS_API_KEY` if notification-service isn't on its defaults.
 - **API:** [`booking-service/`](booking-service/README.md), Spring Boot on port 8082. It accepts Team 1's login tokens, so it needs the same `JWT_SECRET`.
 
 ```bash
@@ -314,6 +363,7 @@ All of these need a Team 1 login unless marked public. Customers only see their 
 
 | Method | Path | Who | Purpose |
 |---|---|---|---|
+| GET | `/api/concessions/rules` | public | The concessions a passenger can be booked with (the `concession_rule` table) |
 | GET | `/api/concessions/preview?category=STUDENT&baseFare=500` | public | Fare after concession |
 | POST | `/api/payments/order` | CUSTOMER (owner) | `{ "pnr": "1000000016" }` |
 | POST | `/api/payments/verify` | CUSTOMER (owner) | `{ razorpayOrderId, razorpayPaymentId, razorpaySignature }` |
@@ -324,7 +374,7 @@ All of these need a Team 1 login unless marked public. Customers only see their 
 | POST | `/api/refunds` | owner, STAFF, ADMIN | `{ "pnr": "...", "passengerIds": [12], "reason": "..." }` (no ids = everyone left) |
 | GET | `/api/refunds/booking/{pnr}` | owner, STAFF, ADMIN | Refunds for a booking |
 | GET | `/api/refunds/my` | CUSTOMER | My refunds |
-| POST | `/api/concessions/apply` | CUSTOMER, ADMIN | `{ "pnr", "passengerId", "category", "idCardType", "idCardNumber" }` |
+| POST | `/api/concessions/apply` | CUSTOMER, ADMIN | `{ "pnr", "passengerId", "idCardType", "idCardNumber", "documentReferenceUrl" }`: documents for the concession the passenger was booked with |
 | GET | `/api/concessions/pending`, POST `/api/concessions/{id}/review` | STAFF, ADMIN | Verify concession documents |
 | GET | `/api/concessions/booking/{pnr}` | owner, STAFF, ADMIN | Applications for a booking |
 
@@ -341,9 +391,23 @@ The unit tests need no database. The integration tests (`web/*Test`) run against
 - partial and full refunds, and a refused refund rolling the cancellation back;
 - concessions and logins.
 
-### Concession rules (`application.properties`)
+### Concessions
 
-Percent off base fare: GENERAL 0, SENIOR_CITIZEN 40, STUDENT 25, CHILD 50, DIFFERENTLY_ABLED 50, ARMED_FORCES 30. These are placeholder numbers; change them to whatever the group agrees on.
+The concessions are the rows of the shared `concession_rule` table (`database/c3-booking/seed_dev.sql`); there is no second list in this app.
+
+| `category` | Discount | Ages |
+|---|---|---|
+| `SENIOR_CITIZEN` | 40% | 60 or more |
+| `STUDENT` | 25% | |
+| `CHILD` | 50% | 5 to 11 |
+| `DIFFERENTLY_ABLED` | 50% | |
+| `ARMED_FORCES` | 30% | |
+
+1. **Booking.** Each passenger may be booked with one (`concessionId` in booking-service's `POST /api/bookings`). Team 3's `calc_fare` takes it off the distance fare (not the reservation charge), and `create_booking` refuses a passenger outside its ages.
+2. **Documents.** The customer then sends the documents for it (`POST /api/concessions/apply`). The application records the concession and the discount the booking gave; a passenger booked without one can't apply.
+3. **Review.** Staff approve or reject the application. A rejection is recorded; the fare isn't changed afterwards (collecting the difference is not built).
+
+The numbers are placeholders; change them in the seed (or the table) to whatever the group agrees on.
 
 ### Refund policy (`application.properties`)
 
@@ -356,7 +420,9 @@ Refund is a percentage of the **amount actually paid** (after concession):
 | 4h to 24h | 50% |
 | under 4h | no refund (cancelling is still allowed and frees the seats) |
 
-The refund is worked out on what was paid for the passengers being cancelled. The schema has no departure time yet (Team 2), so departure is taken as the start of the travel day in India (00:00 IST). That never gives more refund than the policy allows.
+The refund is worked out on what was paid for the passengers being cancelled. Departure is when the train leaves the passenger's boarding station by Team 2's timetable (`stop_departure_at`); should a run have no timetable, the start of the travel day in India (00:00 IST) is used, which never gives more refund than the policy allows.
+
+Paid bookings, payments and refunds also queue Team 6 notifications (`BOOKING_CONFIRMED`, `PAYMENT_CONFIRMED`, `BOOKING_CANCELLED` with the refund) in the same transaction; booking-service delivers them.
 
 ### Webhook setup (optional for local testing)
 
@@ -372,16 +438,26 @@ The refund is worked out on what was paid for the passengers being cancelled. Th
 
 ### Things to revisit
 
-- **Concessions have two sources of truth:**
-  - Team 3's `concession_rule` table, applied per passenger at booking, which changes the fare paid;
-  - this app's `concession.*` percentages and staff-verified applications, which don't change the fare yet.
-
-  Agree on one, then remove the other.
-- **Departure time for the refund windows** (see Refund policy).
+- **A rejected concession** is only recorded. The fare was already reduced at booking, so the difference should be collected, or the passenger cancelled.
 - **Waitlisted passengers when the chart is prepared.** If they still have no berth, they should be refunded in full automatically.
 - **A reconciliation job** for orders stuck in `CREATED`.
-- **Error format.** This app answers `{"error": "message"}`, while Team 1 and Team 3 answer `{"error": {"code", "message"}}`.
-- **Gateway errors reach customers word for word.** A refused Razorpay call comes back as e.g. `Could not create refund: Status Code: 404 Server response: {...}`. Log the details and show a plain message instead.
+
+---
+
+## Team 6 — Notifications, Live Status & Feedback
+
+- **Notifications:** what happened to a user's bookings (paid, payment received, cancelled with refund, waitlist → RAC → confirmed, journey reminder, journey completed), under the bell in the app's header. Stored in MongoDB.
+- **Feedback:** after a journey, the passenger rates it (1-10 in 6 categories) and can write a comment; staff see all feedback and the averages per train (`GET /api/feedback/summary`).
+- **Live status:** the page that shows where a PNR's train is, from Team 2's train-service.
+- **API:** [`notification-service/`](notification-service/README.md), Spring Boot + MongoDB on port 8086 (it was in `backend/`, which is Team 1's). Users see only their own notifications and feedback (Team 1 logins, same `JWT_SECRET`); other backends send with `X-Internal-Key: $NOTIFICATIONS_API_KEY`. What each notification type carries: [`NOTIFICATION_TYPES.md`](notification-service/NOTIFICATION_TYPES.md).
+- **Screens:** the bell, notification centre, Feedback and Live status tabs of the [frontend](frontend/README.md).
+
+```bash
+cd notification-service && JWT_SECRET=<Team 1's secret> ./mvnw spring-boot:run      # needs MongoDB on localhost:27017
+cd notification-service && ./mvnw test                                            # MongoDB database team6_test
+```
+
+The demo endpoints (fake journey, reset) are off; start with `TEAM6_DEMO=true`, and the frontend with `VITE_TEAM6_DEMO=true` to see their buttons.
 
 ---
 

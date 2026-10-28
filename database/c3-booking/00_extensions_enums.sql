@@ -1,6 +1,7 @@
 -- =====================================================================
 -- C3 Booking — 00: extensions and enum types
--- Run after the C1 identity scripts (database/c1-identity/), before 01.
+-- Run after C1 identity (database/c1-identity/) and C2 network
+-- (database/c2-network/), which owns train_type_enum and the network tables.
 --
 -- Identity enums (role_name_enum, user_status_enum) belong to C1 and
 -- payment/refund enums belong to Team 4, so they are not created here.
@@ -9,15 +10,6 @@
 -- btree_gist: lets the seat_allocation exclusion constraint combine
 -- equality on seat_id/run_id with overlap on the journey segment.
 CREATE EXTENSION IF NOT EXISTS btree_gist;
-
--- ---------------------------------------------------------------------
--- Network (placeholder for Team 2, see 01_network_placeholder.sql)
--- ---------------------------------------------------------------------
-CREATE TYPE train_type_enum AS ENUM (
-    'Express',
-    'Slow',
-    'High-Speed'
-);
 
 -- ---------------------------------------------------------------------
 -- Quota (Team 3)

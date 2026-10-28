@@ -1,6 +1,7 @@
 # Runs every team's test suite on each pull request and on pushes to main.
-# Each job gets its own PostgreSQL, so suites that rebuild railway_test
-# don't interfere. Razorpay is mocked in the payments tests: no secrets needed.
+# Each job gets its own PostgreSQL (or MongoDB for Team 6), so suites that
+# rebuild railway_test don't interfere. Razorpay is mocked in the payments
+# tests: no secrets needed.
 name: CI
 
 on:
@@ -47,8 +48,8 @@ jobs:
           PGDATABASE=railway_test ../database/setup.sh --reset
           npm run test:db
 
-  booking-and-payments:
-    name: Team 3 booking and Team 4 payments
+  network-booking-and-payments:
+    name: Team 2 network, Team 3 booking and Team 4 payments
     runs-on: ubuntu-24.04
     services:
       postgres:
@@ -68,6 +69,11 @@ jobs:
           cache-dependency-path: |
             pom.xml
             booking-service/pom.xml
+            train-service/pom.xml
+      - name: C2 network database tests
+        run: ./database/c2-network/tests/run_tests.sh
+      - name: Train service API tests
+        run: ./train-service/run_tests.sh
       - name: C3 database tests
         run: ./database/c3-booking/tests/run_tests.sh
       - name: Booking API tests
@@ -76,6 +82,31 @@ jobs:
         run: |
           PGDATABASE=railway_test ./database/setup.sh --reset
           ./mvnw -B test
+
+  notifications:
+    name: Team 6 notifications and feedback
+    runs-on: ubuntu-24.04
+    services:
+      mongo:
+        image: mongo:7
+        ports: ['27017:27017']
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ping: 1})'" --health-interval 5s --health-timeout 5s --health-retries 10
+    defaults:
+      run:
+        working-directory: notification-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+          cache-dependency-path: notification-service/pom.xml
+      - name: API tests (MongoDB database team6_test)
+        run: ./mvnw -B test
+        env:
+          TEAM6_TEST_MONGO_URI: mongodb://localhost:27017/team6_test
 
   frontend:
     name: Frontend build

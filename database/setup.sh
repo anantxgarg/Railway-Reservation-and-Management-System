@@ -3,12 +3,12 @@
 #
 # Usage:  PGHOST=localhost PGUSER=postgres ./database/setup.sh [--reset] [--no-dev-data]
 #   --reset        drop and recreate the database first (deletes ALL data in it)
-#   --no-dev-data  skip development seed data (test users, sample network)
+#   --no-dev-data  skip development seed data (test users, sample network, quotas)
 #
 # Database name comes from PGDATABASE (default: railway). Connection settings use
 # the standard PG* environment variables (PGHOST, PGPORT, PGUSER, PGPASSWORD).
 #
-# Order: C1 identity -> C3 booking (incl. network/concession placeholders).
+# Order: C1 identity -> C2 network -> C3 booking (incl. Team 4's concession_rule).
 # Team 4's app creates its own tables on startup (Flyway), so start it afterwards.
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -46,6 +46,10 @@ run c1-identity/schema.sql
 run c1-identity/schema_auth_tokens.sql
 run c1-identity/seed.sql
 [[ $DEV_DATA -eq 1 ]] && run c1-identity/seed_dev_users.sql
+
+echo "== C2 network (Team 2)"
+for f in schema functions triggers views; do run "c2-network/$f.sql"; done
+[[ $DEV_DATA -eq 1 ]] && run c2-network/seed_dev.sql
 
 echo "== C3 booking (Team 3)"
 for f in c3-booking/[0-9][0-9]_*.sql; do run "$f"; done

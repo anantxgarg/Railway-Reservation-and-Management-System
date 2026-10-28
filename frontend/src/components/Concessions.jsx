@@ -9,14 +9,22 @@ import {
 import CardMembershipIcon from '@mui/icons-material/CardMembership';
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 import { api, bookingApi } from '../api';
+import { concessionLabel, useConcessionRules } from '../features/booking/concessions';
 
-const CONCESSION_CATEGORIES = [
-  { value: 'STUDENT', label: 'Student (25%)' },
-  { value: 'SENIOR_CITIZEN', label: 'Senior Citizen (40%)' },
-  { value: 'DIFFERENTLY_ABLED', label: 'Differently Abled (50%)' },
-  { value: 'ARMED_FORCES', label: 'Armed Forces (30%)' },
-  { value: 'CHILD', label: 'Child (50%)' },
-];
+// A suggestion for the document type field, by concession
+const ID_TYPES = {
+  STUDENT: 'STUDENT_ID',
+  SENIOR_CITIZEN: 'AADHAAR',
+  CHILD: 'BIRTH_CERTIFICATE',
+  DIFFERENTLY_ABLED: 'DISABILITY_CERTIFICATE',
+  ARMED_FORCES: 'DEFENCE_CARD',
+};
+
+/**
+ * Concessions are chosen per passenger when booking (the shared
+ * concession_rule table). Here customers send the documents for them, and
+ * staff approve or reject them.
+ */
 
 export default function Concessions({ user }) {
   const isStaffOrAdmin = user.role === 'STAFF' || user.role === 'ADMIN';
@@ -25,11 +33,11 @@ export default function Concessions({ user }) {
   const [form, setForm] = useState({
     pnr: '',
     passengerId: '',
-    category: 'STUDENT',
-    idCardType: 'STUDENT_ID',
-    idCardNumber: 'STU-2026-987',
-    documentReferenceUrl: 'https://docs.railways.gov.in/proofs/student-id.pdf'
+    idCardType: '',
+    idCardNumber: '',
+    documentReferenceUrl: ''
   });
+  const rules = useConcessionRules();
   const [submitting, setSubmitting] = useState(false);
   // passengers of the PNR being applied for, from the booking service
   const [passengers, setPassengers] = useState([]);
@@ -82,7 +90,7 @@ export default function Concessions({ user }) {
     if (form.pnr.length !== 10) return undefined;
     let current = true;
     bookingApi.get(form.pnr)
-      .then((b) => current && setPassengers(b.passengers.filter((p) => p.status !== 'CANCELLED')))
+      .then((b) => current && setPassengers(b.passengers.filter((p) => p.status !== 'CANCELLED' && p.concessionId != null)))
       .catch((err) => current && setPnrError(err.message));
     return () => {
       current = false;
@@ -97,13 +105,12 @@ export default function Concessions({ user }) {
       await api.applyConcession({
         pnr: form.pnr,
         passengerId: Number(form.passengerId),
-        category: form.category,
         idCardType: form.idCardType,
         idCardNumber: form.idCardNumber,
         documentReferenceUrl: form.documentReferenceUrl
       });
       setAlert({ type: 'success', msg: 'Concession application submitted successfully! Verification pending.' });
-      setForm({ ...form, pnr: '', passengerId: '' });
+      setForm({ ...form, pnr: '', passengerId: '', idCardNumber: '', documentReferenceUrl: '' });
       loadData();
     } catch (err) {
       setAlert({ type: 'error', msg: err.message || 'Failed to submit concession application' });
@@ -149,7 +156,7 @@ export default function Concessions({ user }) {
         <Typography variant="body2" sx={{ color: '#94a3b8' }}>
           {isStaffOrAdmin 
             ? 'Officer Dashboard: Inspect submitted ID credentials and approve or reject ticket fare concessions.'
-            : 'Passenger Portal: Apply for Student, Senior Citizen, or Armed Forces concessions with document proof.'}
+            : 'Send the documents for the concessions your passengers were booked with (student, senior citizen, armed forces, ...). Staff check them.'}
         </Typography>
       </Paper>
 
@@ -298,26 +305,27 @@ export default function Concessions({ user }) {
                       labelId="concession-passenger-label"
                       value={form.passengerId}
                       label="Passenger"
-                      onChange={(e) => setForm({ ...form, passengerId: e.target.value })}
+                      onChange={(e) => {
+                        const p = passengers.find((x) => x.passengerId === e.target.value);
+                        const rule = rules.find((r) => r.concessionId === p?.concessionId);
+                        setForm({ ...form, passengerId: e.target.value, idCardType: ID_TYPES[rule?.category] || form.idCardType });
+                      }}
                     >
-                      {passengers.map((p) => (
-                        <MenuItem key={p.passengerId} value={p.passengerId}>{p.passengerNo}. {p.name} ({p.age})</MenuItem>
-                      ))}
+                      {passengers.map((p) => {
+                        const rule = rules.find((r) => r.concessionId === p.concessionId);
+                        return (
+                          <MenuItem key={p.passengerId} value={p.passengerId}>
+                            {p.passengerNo}. {p.name} ({p.age}) · {rule ? concessionLabel(rule) : 'concession'}
+                          </MenuItem>
+                        );
+                      })}
                     </Select>
                   </FormControl>
-                  <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-                    <InputLabel id="concession-category-label">Concession Category</InputLabel>
-                    <Select
-                      labelId="concession-category-label"
-                      value={form.category}
-                      label="Concession Category"
-                      onChange={(e) => setForm({ ...form, category: e.target.value })}
-                    >
-                      {CONCESSION_CATEGORIES.map(c => (
-                        <MenuItem key={c.value} value={c.value}>{c.label}</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+                  {form.pnr.length === 10 && !pnrError && !passengers.length && (
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                      Nobody on this booking has a concession. Concessions are chosen per passenger when booking.
+                    </Typography>
+                  )}
                   <TextField
                     fullWidth
                     label="ID Document Type"

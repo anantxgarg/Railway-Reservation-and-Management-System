@@ -12,4 +12,6 @@ public interface ConcessionApplicationRepository extends JpaRepository<Concessio
     List<ConcessionApplication> findByUserIdOrderByIdDesc(Integer userId);
 
     List<ConcessionApplication> findByStatusOrderByIdDesc(ConcessionStatus status);
+
+    boolean existsByPassengerIdAndStatusNot(Integer passengerId, ConcessionStatus status);
 }

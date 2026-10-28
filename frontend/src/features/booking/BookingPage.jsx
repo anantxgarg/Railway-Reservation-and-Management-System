@@ -6,17 +6,19 @@ import {
 } from '@mui/material';
 import PaymentIcon from '@mui/icons-material/Payment';
 import TimerIcon from '@mui/icons-material/TimerOutlined';
+import GpsFixedIcon from '@mui/icons-material/GpsFixed';
 import { api, bookingApi } from '../../api';
 import { payForBooking } from '../../components/checkout';
 import { navigate } from '../../router';
 import {
   BOOKING_STATUS_COLOR, PASSENGER_STATUS_COLOR, formatDate, formatDateTime, mmss, rupees, useCountdown
 } from './format';
+import { useConcessionRules } from './concessions';
 
 const HOLD_MS = 15 * 60 * 1000;
 
 /**
- * One booking (#/pnr/{pnr}): PNR status for everyone allowed to see it, and
+ * One booking (/pnr/{pnr}): PNR status for everyone allowed to see it, and
  * for the owner of an unpaid booking the review step, with the 15-minute
  * hold countdown and the hand-off to Team 4's payment.
  *
@@ -33,6 +35,7 @@ export default function BookingPage({ pnr, user }) {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [paying, setPaying] = useState(false);
   const [message, setMessage] = useState(null);
+  const concessions = useConcessionRules();
 
   const load = useCallback(async () => {
     try {
@@ -112,6 +115,13 @@ export default function BookingPage({ pnr, user }) {
           <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1.5, mb: 1 }}>
             <Typography variant="h5" component="h1">PNR {booking.pnr}</Typography>
             <Chip label={booking.status} color={BOOKING_STATUS_COLOR[booking.status]} sx={{ fontWeight: 600 }} />
+            <Box sx={{ flexGrow: 1 }} />
+            {/* Team 6's live status page, fed by Team 2's train-service */}
+            {booking.status === 'CONFIRMED' && (
+              <Button size="small" variant="outlined" startIcon={<GpsFixedIcon />} onClick={() => navigate(`/live-status/${booking.pnr}`)}>
+                Live status
+              </Button>
+            )}
           </Box>
           <Typography variant="h6" component="p">
             {booking.trainName} <Typography component="span" color="text.secondary">#{booking.trainNo}</Typography>
@@ -174,7 +184,14 @@ export default function BookingPage({ pnr, user }) {
                       </TableCell>
                     )}
                     <TableCell>{p.passengerNo}</TableCell>
-                    <TableCell>{p.name}</TableCell>
+                    <TableCell>
+                      {p.name}
+                      {p.concessionId != null && (
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          {concessions.find((c) => c.concessionId === p.concessionId)?.name || 'Concession'}
+                        </Typography>
+                      )}
+                    </TableCell>
                     <TableCell>{p.age} {p.gender}</TableCell>
                     <TableCell>
                       <Chip label={p.label} size="small" color={PASSENGER_STATUS_COLOR[p.status]} sx={{ fontWeight: 600 }} />

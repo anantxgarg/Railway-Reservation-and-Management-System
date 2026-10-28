@@ -118,9 +118,12 @@ async function register(input, requestMeta = {}) {
  *
  * @param {{email:string, password:string}} input
  * @param {{ipAddress?:string, deviceInfo?:string}} [requestMeta]
+ * @param {{requiredRole?:string}} [options] - when set (e.g. 'ADMIN' for the admin
+ *   portal), an otherwise-valid login by any other role is refused BEFORE a login is
+ *   recorded or any token is issued. The role is the one stored in the database.
  * @returns {Promise<{message:string, accessToken:string, refreshToken:string, user:object}>}
  */
-async function login(input, requestMeta = {}) {
+async function login(input, requestMeta = {}, options = {}) {
   const { email, password } = input;
   const normalEmail = repo.normaliseEmail(email);
 
@@ -192,6 +195,23 @@ async function login(input, requestMeta = {}) {
     throw Object.assign(new Error(message), {
       code:   'ACCOUNT_NOT_ACTIVE',
       status: user.status,
+    });
+  }
+
+  // Role gate (admin portal): correct credentials, wrong role -> no token at all.
+  if (options.requiredRole && user.role_name !== options.requiredRole) {
+    await audit.log({
+      userId:       String(user.user_id),
+      action:       audit.ACTIONS.LOGIN_BLOCKED,
+      resourceType: 'USER',
+      resourceId:   String(user.user_id),
+      result:       'FAILURE',
+      metadata:     { reason: 'role_not_permitted', required_role: options.requiredRole, actual_role: user.role_name },
+      ipAddress:    requestMeta.ipAddress,
+      deviceInfo:   requestMeta.deviceInfo,
+    });
+    throw Object.assign(new Error('This account is not authorized for this portal'), {
+      code: 'ROLE_NOT_PERMITTED',
     });
   }
 

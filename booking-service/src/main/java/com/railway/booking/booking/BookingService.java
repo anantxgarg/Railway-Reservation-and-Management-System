@@ -86,6 +86,9 @@ public class BookingService {
         }
         var rows = bookings.cancel(pnr, passengerIds);
         List<CancelledPassenger> cancelled = rows.stream().map(BookingRepository.CancelRow::passenger).toList();
+        // Team 6's BOOKING_CANCELLED, delivered after commit (notification_outbox); nothing was paid
+        bookings.queueCancelledNotification(pnr, cancelled.size(),
+                booking.userId() == user.userId() ? "Cancelled before payment" : "Cancelled by railway staff");
         BigDecimal total = cancelled.stream().map(CancelledPassenger::fare).reduce(BigDecimal.ZERO, BigDecimal::add);
         boolean paid = rows.stream().anyMatch(BookingRepository.CancelRow::bookingWasPaid);
         return new CancelResult(pnr, paid, total, cancelled, bookings.detail(pnr).orElseThrow());

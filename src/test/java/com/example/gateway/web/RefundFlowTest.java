@@ -91,6 +91,10 @@ class RefundFlowTest extends PaymentApiTestBase {
                 .isEqualTo("PARTIALLY_REFUNDED");
         verify(razorpay.payments).refund(eq("pay_" + pnr),
                 argThat(req -> req.getLong("amount") == expected.movePointRight(2).longValueExact()));
+        // Team 6 is told (Team 3's notification outbox): 1 passenger cancelled, with the refund
+        assertThat(dbValue("SELECT (data->>'cancelledPassengers') || ' ' || (data->>'refundAmount') FROM notification_outbox "
+                + "WHERE pnr = ? AND type = 'BOOKING_CANCELLED'", String.class, pnr))
+                .isEqualTo("1 " + expected.toPlainString());
     }
 
     @Test
@@ -133,7 +137,7 @@ class RefundFlowTest extends PaymentApiTestBase {
         String other = book(CUSTOMER, 1, 6);
         refund(CUSTOMER, pnr, List.of(passengerId(other, 1)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("is not an active passenger")));
+                .andExpect(jsonPath("$.error.message").value(org.hamcrest.Matchers.containsString("is not an active passenger")));
     }
 
     /**
@@ -147,7 +151,10 @@ class RefundFlowTest extends PaymentApiTestBase {
         int p1 = passengerId(pnr, 1);
         when(razorpay.payments.refund(anyString(), any())).thenThrow(new RazorpayException("refund declined"));
         try {
-            refund(CUSTOMER, pnr, null).andExpect(status().isBadGateway());
+            refund(CUSTOMER, pnr, null).andExpect(status().isBadGateway())
+                    .andExpect(jsonPath("$.error.code").value("GATEWAY_ERROR"))
+                    .andExpect(jsonPath("$.error.message").value(org.hamcrest.Matchers.not(
+                            org.hamcrest.Matchers.containsString("refund declined"))));
             assertThat(passengerStatus(p1)).isEqualTo("CONFIRMED");
             assertThat(bookingStatus(pnr)).isEqualTo("CONFIRMED");
             assertThat(jdbc.queryForObject("SELECT count(*) FROM refunds WHERE pnr = ?", Integer.class, pnr)).isZero();
@@ -163,17 +170,24 @@ class RefundFlowTest extends PaymentApiTestBase {
 
     @Test
     void cancellingInsideTheLastWindowIsAllowedAndRefundsNothing() throws Exception {
-        String pnr = book(CUSTOMER, 1, 0);   // leaves today: less than 4h by the policy's clock
+        String pnr = book(CUSTOMER, 1, 0);   // today's Intercity (12127, route CSMT-PUNE)
         jdbc.update("""
                 INSERT INTO payments (pnr, user_id, razorpay_order_id, razorpay_payment_id, amount, currency, status, version)
                 SELECT pnr, user_id, 'order_' || pnr, 'pay_' || pnr, total_fare, 'INR', 'PAID', 0 FROM booking WHERE pnr = ?""",
                 pnr);
         jdbc.queryForObject("SELECT confirm_booking(?)", BigDecimal.class, pnr);
-
-        refund(CUSTOMER, pnr, null)
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.amount").value(0))
-                .andExpect(jsonPath("$.razorpayRefundId").doesNotExist());
+        // make it leave in an hour by Team 2's timetable, whatever the time now
+        String departure = dbValue("SELECT departure_time::TEXT FROM route WHERE route_code = 'CSMT-PUNE'", String.class);
+        jdbc.update("UPDATE route SET departure_time = (now() AT TIME ZONE 'Asia/Kolkata' + interval '1 hour')::TIME "
+                + "WHERE route_code = 'CSMT-PUNE'");
+        try {
+            refund(CUSTOMER, pnr, null)
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.amount").value(0))
+                    .andExpect(jsonPath("$.razorpayRefundId").doesNotExist());
+        } finally {
+            jdbc.update("UPDATE route SET departure_time = ?::TIME WHERE route_code = 'CSMT-PUNE'", departure);
+        }
         assertThat(bookingStatus(pnr)).isEqualTo("CANCELLED");
         verify(razorpay.payments, never()).refund(anyString(), any());
     }

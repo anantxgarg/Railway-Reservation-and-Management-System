@@ -41,10 +41,10 @@ import java.util.List;
 public class RefundService {
 
     /**
-     * The schema has no departure time yet (Team 2), only the date the train
-     * leaves the passenger's boarding station. Until it does, departure is taken
-     * as the start of that day in India: refunds are worked out as if the train
-     * left at midnight, which never gives more than the policy allows.
+     * Departure is when the train leaves the passenger's boarding station, from
+     * Team 2's timetable (route departure time + stop offset, in India time).
+     * Should a run have no timetable, the start of the travel day in India is
+     * used, which never gives more than the policy allows.
      */
     static final ZoneId RAILWAY_ZONE = ZoneId.of("Asia/Kolkata");
 
@@ -83,7 +83,7 @@ public class RefundService {
             throw ApiException.badRequest("Some passengers are not active passengers of PNR " + pnr);
         }
         BigDecimal paid = chosen.stream().map(PassengerInfo::fare).reduce(BigDecimal.ZERO, BigDecimal::add);
-        return buildQuote(pnr, paid, policyFor(booking.journeyDate(), Instant.now()));
+        return buildQuote(pnr, paid, policyFor(departure(booking), Instant.now()));
     }
 
     /**
@@ -101,7 +101,7 @@ public class RefundService {
         // cancel first: it validates the passenger ids and returns what each one paid
         List<CancelledPassenger> cancelled = reservations.cancel(pnr, passengerIds);
         BigDecimal paid = cancelled.stream().map(CancelledPassenger::fare).reduce(BigDecimal.ZERO, BigDecimal::add);
-        RefundQuote quote = buildQuote(pnr, paid, policyFor(booking.journeyDate(), Instant.now()));
+        RefundQuote quote = buildQuote(pnr, paid, policyFor(departure(booking), Instant.now()));
 
         Refund r = new Refund();
         r.setPnr(pnr);
@@ -117,6 +117,7 @@ public class RefundService {
             r.setStatus(RefundStatus.PROCESSED);   // nothing to send back: quote.note() says why
         }
         refunds.save(r);
+        reservations.notifyCancelled(pnr, cancelled.size(), quote.refundAmount(), r.getReason());   // Team 6
 
         boolean everyoneCancelled = reservations.activePassengers(pnr).isEmpty();
         payment.setStatus(everyoneCancelled ? PaymentStatus.REFUNDED : PaymentStatus.PARTIALLY_REFUNDED);
@@ -167,9 +168,18 @@ public class RefundService {
 
     // ---------- helpers ----------
 
-    /** The refund policy for a train leaving on departureDate, asked at time now. */
+    private static Instant departure(Reservation booking) {
+        return booking.departsAt() != null ? booking.departsAt()
+                : booking.journeyDate().atStartOfDay(RAILWAY_ZONE).toInstant();
+    }
+
+    /** The refund policy for a train leaving at the start of departureDate (India), asked at time now. */
     Policy policyFor(LocalDate departureDate, Instant now) {
-        Instant departure = departureDate.atStartOfDay(RAILWAY_ZONE).toInstant();
+        return policyFor(departureDate.atStartOfDay(RAILWAY_ZONE).toInstant(), now);
+    }
+
+    /** The refund policy for a train leaving at departure, asked at time now. */
+    Policy policyFor(Instant departure, Instant now) {
         double hoursLeft = Duration.between(now, departure).toMinutes() / 60.0;
 
         if (hoursLeft >= fullWindowHours) {
@@ -205,7 +215,8 @@ public class RefundService {
             r.setStatus("processed".equalsIgnoreCase(rzpStatus) ? RefundStatus.PROCESSED : RefundStatus.PENDING);
         } catch (RazorpayException e) {
             log.error("Razorpay refund failed", e);
-            throw ApiException.gateway("Could not create refund: " + e.getMessage());
+            throw ApiException.gateway("The payment gateway refused the refund, so nothing was cancelled. "
+                    + "Please try again later.");
         }
     }
 

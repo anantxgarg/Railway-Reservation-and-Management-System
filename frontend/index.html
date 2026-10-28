@@ -1,18 +1,31 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" href="data:," />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Railway Reservation</title>
-    <!-- Roboto font for Material UI -->
+    <meta name="description" content="Railway Reservation & Management System" />
+    <title>Safar · Railway Reservation &amp; Management System</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
-    <!-- Razorpay Checkout JS -->
+    <!-- Plus Jakarta Sans for Team 1's account pages, Roboto for the Material UI screens -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <!-- Razorpay Checkout (Team 4), used by src/components/checkout.js -->
     <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <script>
+      (function() {
+        try {
+          var t = localStorage.getItem('railway_theme');
+          if (t === 'dark') {
+            document.documentElement.setAttribute('data-theme', 'dark');
+          } else {
+            document.documentElement.setAttribute('data-theme', 'light');
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
-  <body style="margin: 0; background-color: #0b111e;">
+  <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

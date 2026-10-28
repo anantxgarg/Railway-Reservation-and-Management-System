@@ -1,22 +1,23 @@
 import React, { useEffect, useState } from 'react';
 import {
   Box, Card, CardContent, Typography, TextField, Button, Grid, Alert,
-  CircularProgress, Chip, IconButton, Tooltip, ButtonBase, Divider
+  CircularProgress, Chip, IconButton, Tooltip, ButtonBase, Divider, Autocomplete
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
-import { bookingApi } from '../../api';
+import { bookingApi, networkApi } from '../../api';
 import { navigate } from '../../router';
 import { availabilityLabel, formatDate, isoDate, rupees } from './format';
 
 /**
  * Search trains between two stations on a date, with availability and fare
- * per class. The search is in the URL (#/search/NDLS/MAS/2026-11-02), so
+ * per class. The search is in the URL (/search/NDLS/MAS/2026-11-02), so
  * results can be bookmarked and Back returns to them.
  *
- * Departure and arrival times aren't shown: the schema doesn't store a
- * train's departure time yet (Team 2's area), only dates.
+ * Stations are picked from Team 2's list (train-service); codes can still be
+ * typed if it is down. Times are Team 2's timetable (route departure + stop
+ * offsets).
  */
 export default function SearchPage({ params, canBook }) {
   const [from, to, date] = params;
@@ -24,6 +25,11 @@ export default function SearchPage({ params, canBook }) {
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [stations, setStations] = useState([]);
+
+  useEffect(() => {
+    networkApi.stations().then(setStations).catch(() => setStations([]));
+  }, []);
 
   useEffect(() => {
     setForm({ from: from || '', to: to || '', date: date || isoDate(1) });
@@ -57,10 +63,9 @@ export default function SearchPage({ params, canBook }) {
           <form onSubmit={submit}>
             <Grid container spacing={2} alignItems="center">
               <Grid item xs={12} sm={4} md={3}>
-                <TextField
-                  fullWidth label="From (station code)" placeholder="NDLS" required
-                  value={form.from} onChange={(e) => setForm({ ...form, from: e.target.value })}
-                  inputProps={{ style: { textTransform: 'uppercase' } }}
+                <StationField
+                  label="From" placeholder="NDLS" stations={stations}
+                  value={form.from} onChange={(v) => setForm((f) => ({ ...f, from: v }))}
                 />
               </Grid>
               <Grid item xs={12} sm="auto" sx={{ textAlign: 'center' }}>
@@ -71,10 +76,9 @@ export default function SearchPage({ params, canBook }) {
                 </Tooltip>
               </Grid>
               <Grid item xs={12} sm={4} md={3}>
-                <TextField
-                  fullWidth label="To (station code)" placeholder="MAS" required
-                  value={form.to} onChange={(e) => setForm({ ...form, to: e.target.value })}
-                  inputProps={{ style: { textTransform: 'uppercase' } }}
+                <StationField
+                  label="To" placeholder="MAS" stations={stations}
+                  value={form.to} onChange={(v) => setForm((f) => ({ ...f, to: v }))}
                 />
               </Grid>
               <Grid item xs={12} sm={4} md={3}>
@@ -118,9 +122,9 @@ export default function SearchPage({ params, canBook }) {
               <Typography variant="body2" color="text.secondary">{Number(r.distanceKm)} km</Typography>
             </Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap', mb: 2 }}>
-              <StopLabel stop={r.from} />
+              <StopLabel stop={r.from} time={r.from.departure} />
               <ArrowForwardIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-              <StopLabel stop={r.to} />
+              <StopLabel stop={r.to} time={r.to.arrival} />
             </Box>
             <Divider sx={{ mb: 2 }} />
             <Grid container spacing={1.5}>
@@ -153,11 +157,43 @@ export default function SearchPage({ params, canBook }) {
   );
 }
 
-function StopLabel({ stop }) {
+function StopLabel({ stop, time }) {
   return (
     <Box>
       <Typography fontWeight={600}>{stop.name} ({stop.code})</Typography>
-      <Typography variant="body2" color="text.secondary">{formatDate(stop.date)}</Typography>
+      <Typography variant="body2" color="text.secondary">
+        {time ? `${time.slice(0, 5)} · ` : ''}{formatDate(stop.date)}
+      </Typography>
     </Box>
+  );
+}
+
+// A station code, picked from Team 2's stations by code, name or city, or typed.
+function StationField({ label, placeholder, stations, value, onChange }) {
+  return (
+    <Autocomplete
+      freeSolo
+      options={stations}
+      getOptionLabel={(s) => (typeof s === 'string' ? s : s.stationCode)}
+      filterOptions={(options, { inputValue }) => {
+        const q = inputValue.trim().toLowerCase();
+        return options.filter((s) => !q || [s.stationCode, s.stationName, s.city].some((t) => t?.toLowerCase().includes(q)));
+      }}
+      renderOption={(props, s) => {
+        const { key, ...rest } = props;
+        return (
+          <li key={key} {...rest}>
+            <Box>
+              <Typography fontWeight={600} component="span">{s.stationCode}</Typography>
+              <Typography variant="body2" color="text.secondary" component="span"> · {s.stationName}, {s.city}</Typography>
+            </Box>
+          </li>
+        );
+      }}
+      inputValue={value}
+      onInputChange={(e, v) => onChange(v.toUpperCase())}
+      onChange={(e, v) => onChange(typeof v === 'string' ? v.toUpperCase() : v?.stationCode || '')}
+      renderInput={(p) => <TextField {...p} fullWidth required label={label} placeholder={placeholder} />}
+    />
   );
 }
