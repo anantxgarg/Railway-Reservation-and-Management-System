@@ -30,6 +30,7 @@ target/
 
 ### Secrets and Environment ###
 .env
+logs/
 *.key
 *.pem
 credentials.properties

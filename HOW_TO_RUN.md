@@ -182,7 +182,15 @@ Team 4's own tables are created by the payments app the first time it starts, so
 
 ## 6. Start everything
 
-Open **six terminals**, all in the repo root. Run `set -a; source .env; set +a` in each, then:
+**Quickest (macOS/Linux/Git Bash):** one terminal, from the repo root:
+
+```bash
+./start-all.sh
+```
+
+It loads `.env` and starts all six. Each one writes to `logs/<service>.log` (e.g. `tail -f logs/team3.log`), and Ctrl+C stops them all. If port 8081 is taken, put `PAYMENTS_PORT=8091` in `.env`.
+
+**Or by hand:** open **six terminals**, all in the repo root. Run `set -a; source .env; set +a` in each, then:
 
 ```bash
 # 1. Team 1: users and login (http://localhost:3000)
