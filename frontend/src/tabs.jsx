@@ -15,7 +15,7 @@ import NotificationBell from './features/notifications/NotificationBell';
 
 // Team 6's bell in the header: unread count, opens the notification centre
 function HeaderBell({ user, onClick }) {
-  return <NotificationBell userId={String(user.userId)} onClick={onClick} className="header-bell" />;
+  return <NotificationBell userId={String(user.userId)} onClick={onClick} className="app-icon-btn app-bell" />;
 }
 
 // The tabs of the logged-in app, in order. `path` is where the tab goes;

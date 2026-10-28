@@ -1,15 +1,21 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  Box, Card, CardContent, Typography, Button, Alert, CircularProgress, Chip,
+  Box, Typography, Button, Alert, CircularProgress, Chip,
   Table, TableHead, TableBody, TableRow, TableCell, TableContainer, Checkbox,
   Dialog, DialogTitle, DialogContent, DialogActions, TextField, Divider, LinearProgress
 } from '@mui/material';
 import PaymentIcon from '@mui/icons-material/Payment';
 import TimerIcon from '@mui/icons-material/TimerOutlined';
 import GpsFixedIcon from '@mui/icons-material/GpsFixed';
+import TrainIcon from '@mui/icons-material/Train';
+import GroupIcon from '@mui/icons-material/GroupsOutlined';
+import ReceiptIcon from '@mui/icons-material/ReceiptLongOutlined';
 import { api, bookingApi } from '../../api';
 import { payForBooking } from '../../components/checkout';
 import { navigate } from '../../router';
+import {
+  DetailGrid, DetailItem, GlassSection, IconTile, LoadingCard, Mono, PageHeader, StatPill
+} from '../../components/ui';
 import {
   BOOKING_STATUS_COLOR, PASSENGER_STATUS_COLOR, formatDate, formatDateTime, mmss, rupees, useCountdown
 } from './format';
@@ -66,13 +72,14 @@ export default function BookingPage({ pnr, user }) {
   if (loadError) {
     return (
       <Box sx={{ maxWidth: 960, mx: 'auto' }}>
+        <PageHeader tag="PNR status" title={`PNR ${pnr}`} />
         <Alert severity="error" action={<Button color="inherit" onClick={() => navigate('/pnr')}>Look up another</Button>}>
           {loadError}
         </Alert>
       </Box>
     );
   }
-  if (!booking) return <Box sx={{ textAlign: 'center', p: 4 }}><CircularProgress /></Box>;
+  if (!booking) return <LoadingCard text="Loading the booking…" />;
 
   const isOwner = user.userId === booking.userId;
   const isStaff = user.role === 'STAFF' || user.role === 'ADMIN';
@@ -108,33 +115,40 @@ export default function BookingPage({ pnr, user }) {
 
   return (
     <Box sx={{ maxWidth: 960, mx: 'auto' }}>
+      <PageHeader
+        tag="PNR status"
+        title={<>PNR <Mono>{booking.pnr}</Mono></>}
+        subtitle={held ? 'Review the details below, then pay to confirm your seats.' : 'The booking, its passengers and any payments.'}
+      />
+
       {message && <Alert severity={message.severity} sx={{ mb: 3 }} onClose={() => setMessage(null)}>{message.text}</Alert>}
 
-      <Card sx={{ mb: 3 }}>
-        <CardContent sx={{ p: 3 }}>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1.5, mb: 1 }}>
-            <Typography variant="h5" component="h1">PNR {booking.pnr}</Typography>
-            <Chip label={booking.status} color={BOOKING_STATUS_COLOR[booking.status]} sx={{ fontWeight: 600 }} />
-            <Box sx={{ flexGrow: 1 }} />
+      <GlassSection
+        title={booking.trainName}
+        subtitle={<>Train <Mono>#{booking.trainNo}</Mono></>}
+        icon={<TrainIcon />}
+        actions={
+          <>
+            <Chip label={booking.status} color={BOOKING_STATUS_COLOR[booking.status]} />
             {/* Team 6's live status page, fed by Team 2's train-service */}
             {booking.status === 'CONFIRMED' && (
               <Button size="small" variant="outlined" startIcon={<GpsFixedIcon />} onClick={() => navigate(`/live-status/${booking.pnr}`)}>
                 Live status
               </Button>
             )}
-          </Box>
-          <Typography variant="h6" component="p">
-            {booking.trainName} <Typography component="span" color="text.secondary">#{booking.trainNo}</Typography>
-          </Typography>
-          <Typography sx={{ mt: 0.5 }}>
-            {booking.from.name} ({booking.from.code}) → {booking.to.name} ({booking.to.code})
-          </Typography>
-          <Typography color="text.secondary" variant="body2" sx={{ mt: 0.5 }}>
-            Journey {formatDate(booking.journeyDate)} · {booking.classCode} {booking.className} · quota {booking.quotaCode}
-            {' · '}booked {formatDateTime(booking.createdAt)}
-          </Typography>
-        </CardContent>
-      </Card>
+          </>
+        }
+        contentSx={{ pt: 2.5 }}
+      >
+        <DetailGrid columns={{ xs: 1, sm: 2, md: 3 }}>
+          <DetailItem label="From">{booking.from.name} ({booking.from.code})</DetailItem>
+          <DetailItem label="To">{booking.to.name} ({booking.to.code})</DetailItem>
+          <DetailItem label="Journey date">{formatDate(booking.journeyDate)}</DetailItem>
+          <DetailItem label="Class">{booking.classCode} {booking.className}</DetailItem>
+          <DetailItem label="Quota">{booking.quotaCode}</DetailItem>
+          <DetailItem label="Booked">{formatDateTime(booking.createdAt)}</DetailItem>
+        </DetailGrid>
+      </GlassSection>
 
       {held && (
         <HoldCard
@@ -147,73 +161,72 @@ export default function BookingPage({ pnr, user }) {
         />
       )}
 
-      <Card sx={{ mb: 3 }}>
-        <CardContent sx={{ p: 3 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 1 }}>
-            <Typography variant="h6" component="h2" sx={{ flexGrow: 1 }}>Passengers</Typography>
-            {canCancel && (
-              <Button variant="outlined" color="error" onClick={() => setCancelOpen(true)}>
-                {selected.length ? `Cancel ${selected.length} selected` : 'Cancel booking'}
-              </Button>
-            )}
-          </Box>
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  {canCancel && <TableCell padding="checkbox" />}
-                  <TableCell>#</TableCell>
-                  <TableCell>Name</TableCell>
-                  <TableCell>Age</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell align="right">Fare</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {booking.passengers.map((p) => (
-                  <TableRow key={p.passengerId}>
-                    {canCancel && (
-                      <TableCell padding="checkbox">
-                        {p.status !== 'CANCELLED' && (
-                          <Checkbox
-                            checked={selected.includes(p.passengerId)}
-                            onChange={() => toggle(p.passengerId)}
-                            inputProps={{ 'aria-label': `Select ${p.name}` }}
-                          />
-                        )}
-                      </TableCell>
+      <GlassSection
+        title="Passengers"
+        icon={<GroupIcon />}
+        padding={0}
+        actions={canCancel && (
+          <Button variant="outlined" color="error" onClick={() => setCancelOpen(true)}>
+            {selected.length ? `Cancel ${selected.length} selected` : 'Cancel booking'}
+          </Button>
+        )}
+      >
+        <TableContainer>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                {canCancel && <TableCell padding="checkbox" />}
+                <TableCell>#</TableCell>
+                <TableCell>Name</TableCell>
+                <TableCell>Age</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell align="right">Fare</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {booking.passengers.map((p) => (
+                <TableRow key={p.passengerId}>
+                  {canCancel && (
+                    <TableCell padding="checkbox">
+                      {p.status !== 'CANCELLED' && (
+                        <Checkbox
+                          checked={selected.includes(p.passengerId)}
+                          onChange={() => toggle(p.passengerId)}
+                          inputProps={{ 'aria-label': `Select ${p.name}` }}
+                        />
+                      )}
+                    </TableCell>
+                  )}
+                  <TableCell>{p.passengerNo}</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>
+                    {p.name}
+                    {p.concessionId != null && (
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        {concessions.find((c) => c.concessionId === p.concessionId)?.name || 'Concession'}
+                      </Typography>
                     )}
-                    <TableCell>{p.passengerNo}</TableCell>
-                    <TableCell>
-                      {p.name}
-                      {p.concessionId != null && (
-                        <Typography variant="caption" color="text.secondary" display="block">
-                          {concessions.find((c) => c.concessionId === p.concessionId)?.name || 'Concession'}
-                        </Typography>
-                      )}
-                    </TableCell>
-                    <TableCell>{p.age} {p.gender}</TableCell>
-                    <TableCell>
-                      <Chip label={p.label} size="small" color={PASSENGER_STATUS_COLOR[p.status]} sx={{ fontWeight: 600 }} />
-                      {p.currentPosition != null && (
-                        <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-                          now {p.status === 'RAC' ? 'RAC' : 'WL'} {p.currentPosition}
-                        </Typography>
-                      )}
-                    </TableCell>
-                    <TableCell align="right">{rupees(p.fare)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
-            <Typography variant="h6">
-              {booking.status === 'CONFIRMED' ? 'Paid ' : 'Total '}{rupees(booking.totalFare)}
-            </Typography>
-          </Box>
-        </CardContent>
-      </Card>
+                  </TableCell>
+                  <TableCell>{p.age} {p.gender}</TableCell>
+                  <TableCell>
+                    <Chip label={p.label} size="small" color={PASSENGER_STATUS_COLOR[p.status]} />
+                    {p.currentPosition != null && (
+                      <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                        now {p.status === 'RAC' ? 'RAC' : 'WL'} {p.currentPosition}
+                      </Typography>
+                    )}
+                  </TableCell>
+                  <TableCell align="right">{rupees(p.fare)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', px: 3, py: 2, borderTop: (t) => `1px solid ${t.app.divider}` }}>
+          <StatPill sx={{ fontSize: '0.95rem', px: 2, py: 0.75 }}>
+            {booking.status === 'CONFIRMED' ? 'Paid' : 'Total'} {rupees(booking.totalFare)}
+          </StatPill>
+        </Box>
+      </GlassSection>
 
       <PaymentHistory payments={history.payments} refunds={history.refunds} />
 
@@ -248,39 +261,37 @@ function HoldCard({ remaining, totalFare, canPay, paying, onPay, onSearchAgain }
   }
   const urgent = remaining < 2 * 60 * 1000;
   return (
-    <Card sx={{ mb: 3, borderColor: urgent ? 'warning.main' : 'primary.main' }}>
-      <CardContent sx={{ p: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
-          <TimerIcon sx={{ fontSize: 36, color: urgent ? 'warning.main' : 'primary.light' }} />
-          <Box sx={{ flexGrow: 1 }}>
-            <Typography variant="h6" component="h2">
-              Seats held for <Box component="span" sx={{ fontVariantNumeric: 'tabular-nums' }} role="timer">{mmss(remaining)}</Box>
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Check the details below, then pay to confirm. Unpaid holds are released automatically.
-            </Typography>
-          </Box>
-          {canPay && (
-            <Button
-              variant="contained"
-              size="large"
-              startIcon={paying ? <CircularProgress size={20} color="inherit" /> : <PaymentIcon />}
-              disabled={paying}
-              onClick={onPay}
-            >
-              Pay {rupees(totalFare)}
-            </Button>
-          )}
+    <GlassSection sx={{ borderColor: urgent ? 'warning.main' : 'primary.main' }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+        <IconTile size={52} color={urgent ? 'warning' : 'primary'}><TimerIcon /></IconTile>
+        <Box sx={{ flexGrow: 1 }}>
+          <Typography variant="h6" component="h2">
+            Seats held for <Box component="span" sx={{ fontVariantNumeric: 'tabular-nums' }} role="timer">{mmss(remaining)}</Box>
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Check the details below, then pay to confirm. Unpaid holds are released automatically.
+          </Typography>
         </Box>
-        <LinearProgress
-          variant="determinate"
-          value={Math.min(100, (remaining / HOLD_MS) * 100)}
-          color={urgent ? 'warning' : 'primary'}
-          sx={{ mt: 2, height: 6, borderRadius: 3 }}
-          aria-hidden
-        />
-      </CardContent>
-    </Card>
+        {canPay && (
+          <Button
+            variant="contained"
+            size="large"
+            startIcon={paying ? <CircularProgress size={20} color="inherit" /> : <PaymentIcon />}
+            disabled={paying}
+            onClick={onPay}
+          >
+            Pay {rupees(totalFare)}
+          </Button>
+        )}
+      </Box>
+      <LinearProgress
+        variant="determinate"
+        value={Math.min(100, (remaining / HOLD_MS) * 100)}
+        color={urgent ? 'warning' : 'primary'}
+        sx={{ mt: 2.5, height: 6, borderRadius: 3 }}
+        aria-hidden
+      />
+    </GlassSection>
   );
 }
 
@@ -374,40 +385,37 @@ function Row({ label, value, strong }) {
 function PaymentHistory({ payments, refunds }) {
   if (!payments.length && !refunds.length) return null;
   return (
-    <Card>
-      <CardContent sx={{ p: 3 }}>
-        <Typography variant="h6" component="h2" gutterBottom>Payments and refunds</Typography>
-        <TableContainer>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Type</TableCell>
-                <TableCell>Reference</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell align="right">Amount</TableCell>
+    <GlassSection title="Payments and refunds" icon={<ReceiptIcon />} padding={0}>
+      <TableContainer>
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell>Type</TableCell>
+              <TableCell>Reference</TableCell>
+              <TableCell>Status</TableCell>
+              <TableCell align="right">Amount</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {payments.map((p) => (
+              <TableRow key={`p${p.id}`}>
+                <TableCell>Payment</TableCell>
+                <TableCell><Mono>{p.razorpayPaymentId || p.razorpayOrderId}</Mono></TableCell>
+                <TableCell>{p.status}</TableCell>
+                <TableCell align="right">{rupees(p.amount)}</TableCell>
               </TableRow>
-            </TableHead>
-            <TableBody>
-              {payments.map((p) => (
-                <TableRow key={`p${p.id}`}>
-                  <TableCell>Payment</TableCell>
-                  <TableCell>{p.razorpayPaymentId || p.razorpayOrderId}</TableCell>
-                  <TableCell>{p.status}</TableCell>
-                  <TableCell align="right">{rupees(p.amount)}</TableCell>
-                </TableRow>
-              ))}
-              {refunds.map((r) => (
-                <TableRow key={`r${r.id}`}>
-                  <TableCell>Refund ({Number(r.refundPercent)}%)</TableCell>
-                  <TableCell>{r.razorpayRefundId || '–'}</TableCell>
-                  <TableCell>{r.status}</TableCell>
-                  <TableCell align="right">{rupees(r.amount)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </CardContent>
-    </Card>
+            ))}
+            {refunds.map((r) => (
+              <TableRow key={`r${r.id}`}>
+                <TableCell>Refund ({Number(r.refundPercent)}%)</TableCell>
+                <TableCell><Mono>{r.razorpayRefundId || '–'}</Mono></TableCell>
+                <TableCell>{r.status}</TableCell>
+                <TableCell align="right">{rupees(r.amount)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </GlassSection>
   );
 }

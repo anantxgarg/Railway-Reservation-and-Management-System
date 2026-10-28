@@ -1,10 +1,55 @@
 import { useState } from 'react';
-import FormInput from './FormInput';
-import AlertMessage from './AlertMessage';
+import { Alert, Box, Button, IconButton, InputAdornment, TextField } from '@mui/material';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
+import Visibility from '@mui/icons-material/Visibility';
+import VisibilityOff from '@mui/icons-material/VisibilityOff';
+import { GlassSection } from './ui';
 import { validatePassword, validateConfirmPassword } from '../utils/validation';
 import { authService } from '../services/authService';
 import { useAuth } from '../context/useAuth';
 
+/**
+ * Password field with a show/hide toggle, used by the change-password form.
+ * Errors come in as a string and are shown under the field.
+ */
+function PasswordField({ id, label, error, helperText, ...rest }) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <TextField
+      id={id}
+      name={id}
+      label={label}
+      type={visible ? 'text' : 'password'}
+      error={Boolean(error)}
+      helperText={error || helperText}
+      fullWidth
+      required
+      slotProps={{
+        input: {
+          endAdornment: (
+            <InputAdornment position="end">
+              <IconButton
+                edge="end"
+                aria-label={visible ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`}
+                onClick={() => setVisible((prev) => !prev)}
+                onMouseDown={(e) => e.preventDefault()}
+              >
+                {visible ? <VisibilityOff /> : <Visibility />}
+              </IconButton>
+            </InputAdornment>
+          ),
+        },
+      }}
+      {...rest}
+    />
+  );
+}
+
+/**
+ * Collapsible "change your password" section of the account pages. Validates
+ * the three fields on blur/submit, calls authService.changePassword and shows
+ * the result as an alert.
+ */
 export default function ChangePasswordCard() {
   const { token } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
@@ -108,90 +153,81 @@ export default function ChangePasswordCard() {
   };
 
   return (
-    <div className="change-password-section">
-      <div className="change-password-header">
-        <div className="change-password-titles">
-          <h3 className="section-title">Security &amp; Password Management</h3>
-          <p className="section-subtitle">
-            Update your account password within the authenticated session
-          </p>
-        </div>
-        <button
-          type="button"
-          className="btn-toggle-security"
+    <GlassSection
+      title="Security & Password Management"
+      subtitle="Update your account password within the authenticated session"
+      icon={<LockOutlinedIcon />}
+      actions={(
+        <Button
+          variant="outlined"
           onClick={() => setIsOpen((prev) => !prev)}
           aria-expanded={isOpen}
         >
           {isOpen ? 'Close Security Settings' : 'Change Password'}
-        </button>
-      </div>
-
+        </Button>
+      )}
+      sx={isOpen ? undefined : { pb: 2.75 }}
+      contentSx={isOpen ? { pt: 2.5 } : { display: 'none' }}
+    >
       {isOpen && (
-        <div className="change-password-card">
+        <Box>
           {statusMessage && (
-            <AlertMessage
-              type={statusMessage.type}
-              message={statusMessage.text}
-              onDismiss={() => setStatusMessage(null)}
-            />
+            <Alert severity={statusMessage.type} onClose={() => setStatusMessage(null)} sx={{ mb: 2.5 }}>
+              {statusMessage.text}
+            </Alert>
           )}
 
-          <form onSubmit={handleSubmit} noValidate className="auth-form">
-            <FormInput
+          <Box
+            component="form"
+            onSubmit={handleSubmit}
+            noValidate
+            sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, maxWidth: 480 }}
+          >
+            <PasswordField
               id="currentPassword"
               label="Current Password"
-              type="password"
               placeholder="Enter current password"
               value={formData.currentPassword}
               onChange={handleChange}
               onBlur={handleBlur}
               error={errors.currentPassword}
-              required
               disabled={isSubmitting}
               autoComplete="current-password"
             />
 
-            <FormInput
+            <PasswordField
               id="newPassword"
               label="New Password"
-              type="password"
               placeholder="At least 8 characters"
               value={formData.newPassword}
               onChange={handleChange}
               onBlur={handleBlur}
               error={errors.newPassword}
               helperText="Must contain uppercase, lowercase, digit, and special character"
-              required
               disabled={isSubmitting}
               autoComplete="new-password"
             />
 
-            <FormInput
+            <PasswordField
               id="confirmPassword"
               label="Confirm New Password"
-              type="password"
               placeholder="Re-enter new password"
               value={formData.confirmPassword}
               onChange={handleChange}
               onBlur={handleBlur}
               error={errors.confirmPassword}
-              required
               disabled={isSubmitting}
               autoComplete="new-password"
             />
 
-            <div className="form-action-row">
-              <button
-                type="submit"
-                className="btn-submit"
-                disabled={isSubmitting}
-              >
+            <Box>
+              <Button type="submit" variant="contained" size="large" disabled={isSubmitting}>
                 {isSubmitting ? 'Updating Password...' : 'Update Password'}
-              </button>
-            </div>
-          </form>
-        </div>
+              </Button>
+            </Box>
+          </Box>
+        </Box>
       )}
-    </div>
+    </GlassSection>
   );
 }
