@@ -1,12 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Card, CardContent, Chip,
+  Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Chip,
   CircularProgress, MenuItem, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   TextField, Typography,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import TrainIcon from '@mui/icons-material/Train';
+import EventAvailableIcon from '@mui/icons-material/EventAvailable';
 import { networkApi } from '../../api';
 import { isoDate } from '../booking/format';
+import {
+  DetailGrid, DetailItem, EmptyState, GlassSection, IconTile, LoadingCard, Mono, PageHeader,
+} from '../../components/ui';
 
 /**
  * Team 2's network (train-service): every train with its weekdays, stops,
@@ -17,10 +22,15 @@ import { isoDate } from '../booking/format';
 export default function TrainsPage({ user }) {
   const isStaff = user.role === 'STAFF' || user.role === 'ADMIN';
   return (
-    <Box sx={{ maxWidth: 960, mx: 'auto' }}>
+    <>
+      <PageHeader
+        tag="Network"
+        title="Trains"
+        subtitle="Every train with its weekdays, stops, timetable and coaches."
+      />
       {isStaff && <RunsPanel />}
       <TrainList />
-    </Box>
+    </>
   );
 }
 
@@ -32,22 +42,23 @@ function TrainList() {
     networkApi.trains().then(setTrains).catch((e) => setError(e.message));
   }, []);
 
+  if (error) return <Alert severity="error">{error}</Alert>;
+  if (!trains) return <LoadingCard text="Loading trains…" />;
+  if (trains.length === 0) return <EmptyState icon={<TrainIcon />} title="No trains yet" text="There are no trains in the network." />;
+
   return (
-    <Card>
-      <CardContent sx={{ p: 3 }}>
-        <Typography variant="h5" component="h1" gutterBottom>Trains</Typography>
-        {error && <Alert severity="error">{error}</Alert>}
-        {!trains && !error && <CircularProgress />}
-        {trains?.map((t) => <TrainDetails key={t.trainNo} train={t} />)}
-      </CardContent>
-    </Card>
+    <GlassSection title="All trains" subtitle="Open a train to see its stops and coaches" icon={<TrainIcon />}>
+      <Box sx={{ mt: 2.5, display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+        {trains.map((t) => <TrainDetails key={t.trainNo} train={t} />)}
+      </Box>
+    </GlassSection>
   );
 }
 
 function TrainDetails({ train }) {
   const [details, setDetails] = useState(null);
 
-  const open = (e, expanded) => {
+  const open = (_, expanded) => {
     if (expanded && !details) {
       Promise.all([networkApi.trainStops(train.trainNo), networkApi.schedules(train.trainNo), networkApi.coaches(train.trainNo)])
         .then(([stops, schedules, coaches]) => setDetails({ stops, schedules, coaches }))
@@ -59,25 +70,46 @@ function TrainDetails({ train }) {
   const routes = details?.stops ? [...new Set(details.stops.map((s) => s.routeId))] : [];
 
   return (
-    <Accordion onChange={open} disableGutters sx={{ bgcolor: 'transparent', backgroundImage: 'none' }}>
-      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-        <Typography fontWeight={600} sx={{ mr: 1 }}>{train.trainName}</Typography>
-        <Typography color="text.secondary">#{train.trainNo} · {train.trainType}</Typography>
-        {!train.isActive && <Chip label="Inactive" size="small" sx={{ ml: 1 }} />}
+    <Accordion
+      onChange={open}
+      disableGutters
+      square
+      sx={{
+        borderRadius: '12px !important', overflow: 'hidden', boxShadow: 'none',
+        bgcolor: (t) => t.app.glassNested, border: (t) => `1px solid ${t.app.divider}`,
+        '&::before': { display: 'none' },
+      }}
+    >
+      <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 2, '& .MuiAccordionSummary-content': { alignItems: 'center', gap: 1.5, flexWrap: 'wrap', minWidth: 0 } }}>
+        <IconTile size={40}><TrainIcon /></IconTile>
+        <Box sx={{ flex: '1 1 160px', minWidth: 0 }}>
+          <Typography fontWeight={700}>{train.trainName}</Typography>
+          <Typography variant="body2" color="text.secondary">
+            #<Mono>{train.trainNo}</Mono> · {train.trainType}
+          </Typography>
+        </Box>
+        {!train.isActive && <Chip label="Inactive" size="small" />}
       </AccordionSummary>
-      <AccordionDetails>
+      <AccordionDetails sx={{ px: 2, pb: 2 }}>
         {!details && <CircularProgress size={24} />}
         {details?.error && <Alert severity="error">{details.error}</Alert>}
         {details?.stops && (
           <>
-            <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', mb: 2 }}>
-              {details.schedules.map((s) => <Chip key={s.runDay} label={s.runDay.slice(0, 3)} size="small" color="primary" variant="outlined" />)}
-              <Box sx={{ flexGrow: 1 }} />
-              {details.coaches.map((c) => <Chip key={c.coachNo} label={`${c.coachNo} · ${c.classCode}`} size="small" />)}
-            </Box>
+            <DetailGrid columns={{ xs: 1, sm: 2 }} sx={{ mb: 2 }}>
+              <DetailItem label="Runs on">
+                <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
+                  {details.schedules.map((s) => <Chip key={s.runDay} label={s.runDay.slice(0, 3)} size="small" color="primary" variant="outlined" />)}
+                </Box>
+              </DetailItem>
+              <DetailItem label="Coaches">
+                <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
+                  {details.coaches.map((c) => <Chip key={c.coachNo} label={`${c.coachNo} · ${c.classCode}`} size="small" />)}
+                </Box>
+              </DetailItem>
+            </DetailGrid>
             {routes.map((routeId) => (
-              <TableContainer key={routeId} sx={{ mb: 2 }}>
-                <Table size="small">
+              <TableContainer key={routeId} sx={{ mb: 2, overflowX: 'auto', border: (t) => `1px solid ${t.app.divider}`, borderRadius: '12px' }}>
+                <Table size="small" sx={{ minWidth: 480 }}>
                   <TableHead>
                     <TableRow>
                       <TableCell>#</TableCell><TableCell>Station</TableCell><TableCell>Arrives</TableCell>
@@ -135,19 +167,22 @@ function RunsPanel() {
   };
 
   return (
-    <Card sx={{ mb: 3 }}>
-      <CardContent sx={{ p: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', mb: 2 }}>
-          <Typography variant="h5" component="h2" sx={{ flexGrow: 1 }}>Runs</Typography>
-          <TextField type="date" size="small" label="Leaving on" value={date}
-            onChange={(e) => setDate(e.target.value)} InputLabelProps={{ shrink: true }} />
-        </Box>
+    <GlassSection
+      title="Runs"
+      subtitle="Report a run's status and delay for the day"
+      icon={<EventAvailableIcon />}
+      actions={(
+        <TextField type="date" size="small" label="Leaving on" value={date}
+          onChange={(e) => setDate(e.target.value)} InputLabelProps={{ shrink: true }} />
+      )}
+    >
+      <Box sx={{ mt: 2.5 }}>
         {notice && <Alert severity={notice.severity} onClose={() => setNotice(null)} sx={{ mb: 2 }}>{notice.text}</Alert>}
         {!runs && <CircularProgress size={24} />}
         {runs?.length === 0 && <Typography color="text.secondary">No train leaves on this day.</Typography>}
         {runs?.map((r) => <RunRow key={r.runId} run={r} onSave={save} />)}
-      </CardContent>
-    </Card>
+      </Box>
+    </GlassSection>
   );
 }
 
@@ -157,8 +192,8 @@ function RunRow({ run, onSave }) {
   const changed = status !== run.status || Number(delay) !== run.delayMinutes;
 
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap', py: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
-      <Typography fontWeight={600} sx={{ minWidth: 70 }}>{run.trainNo}</Typography>
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap', py: 1.25, borderBottom: '1px solid', borderColor: 'divider', '&:last-child': { borderBottom: 0 } }}>
+      <Mono sx={{ minWidth: 70 }}>{run.trainNo}</Mono>
       <Chip label={run.status} size="small" color={STATUS_COLOR[run.status]} sx={{ minWidth: 100 }} />
       <Box sx={{ flexGrow: 1 }} />
       <TextField select size="small" label="Status" value={status} onChange={(e) => setStatus(e.target.value)} sx={{ minWidth: 150 }}>

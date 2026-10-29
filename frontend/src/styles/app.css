@@ -1,0 +1,543 @@
+/* ==========================================================================
+   Frame of the logged-in app (AppShell): background, navbar, tab bar, footer.
+
+   The look follows Team 1's login page (App.css) but is its own copy, so the
+   two can change independently. Every class starts with `app-`; this file is
+   global once loaded, so it never styles bare elements.
+   ========================================================================== */
+
+.app-root {
+  --app-accent: #0B1B3D;
+  --app-accent-contrast: #FFFFFF;
+  --app-text: #1E293B;
+  --app-text-muted: #64748B;
+  --app-navbar-bg: #FFFFFF;
+  --app-navbar-border: #E2E8F0;
+  --app-navbar-shadow: 0 2px 10px rgba(11, 27, 61, 0.08);
+  --app-chip-bg: rgba(255, 255, 255, 0.85);
+  --app-chip-border: #E2E8F0;
+  --app-tabbar-bg: rgba(255, 255, 255, 0.88);
+  --app-tabbar-border: rgba(255, 255, 255, 0.9);
+  --app-tab-hover: rgba(11, 27, 61, 0.06);
+  --app-logo-bg: #0B1B3D;
+  --app-logo-shadow: 0 4px 14px rgba(11, 27, 61, 0.25);
+  --app-overlay: linear-gradient(180deg, rgba(11, 27, 61, 0.5) 0%, rgba(11, 27, 61, 0.38) 100%);
+  --app-footer-bg: rgba(11, 27, 61, 0.55);
+  --app-focus: #0B1B3D;
+
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: var(--app-text);
+  overflow-x: hidden;
+}
+
+.app-root.app-dark {
+  --app-accent: #38BDF8;
+  --app-accent-contrast: #0B1120;
+  --app-text: #F8FAFC;
+  --app-text-muted: #94A3B8;
+  --app-navbar-bg: #0B1120;
+  --app-navbar-border: rgba(255, 255, 255, 0.08);
+  --app-navbar-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  --app-chip-bg: rgba(15, 23, 42, 0.85);
+  --app-chip-border: rgba(255, 255, 255, 0.14);
+  --app-tabbar-bg: rgba(11, 17, 32, 0.78);
+  --app-tabbar-border: rgba(255, 255, 255, 0.08);
+  --app-tab-hover: rgba(255, 255, 255, 0.08);
+  --app-logo-bg: linear-gradient(135deg, #1D4ED8, #2563EB);
+  --app-logo-shadow: 0 4px 14px rgba(29, 78, 216, 0.4);
+  --app-overlay: radial-gradient(circle at 70% 40%, rgba(11, 17, 32, 0.45) 0%, rgba(8, 12, 20, 0.72) 100%);
+  --app-footer-bg: rgba(8, 12, 20, 0.6);
+  --app-focus: #38BDF8;
+}
+
+/* --------------------------------------------------------------------------
+   Background: the login page's railway photo, dimmed and softened so data
+   stays readable on top of it
+   -------------------------------------------------------------------------- */
+.app-bg,
+.app-bg-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+.app-bg {
+  z-index: 0;
+  background: url('/hero-bg.jpg') center / cover no-repeat;
+  filter: blur(4px) saturate(1.05);
+  transform: scale(1.04); /* hides the blurred edge */
+}
+
+.app-dark .app-bg {
+  background-image: url('/hero-bg-dark.png');
+}
+
+.app-bg-overlay {
+  z-index: 1;
+  background: var(--app-overlay);
+}
+
+.app-navbar,
+.app-tabbar,
+.app-main,
+.app-footer {
+  position: relative;
+  z-index: 2;
+}
+
+/* --------------------------------------------------------------------------
+   Navbar
+   -------------------------------------------------------------------------- */
+.app-navbar {
+  position: sticky;
+  top: 0;
+  z-index: 1100;
+  background: var(--app-navbar-bg);
+  border-bottom: 1px solid var(--app-navbar-border);
+  box-shadow: var(--app-navbar-shadow);
+}
+
+.app-navbar-inner,
+.app-tabbar-inner,
+.app-footer-inner {
+  max-width: 1240px;
+  width: 100%;
+  margin: 0 auto;
+  padding-left: 24px;
+  padding-right: 24px;
+}
+
+.app-navbar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.app-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--app-text);
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+.app-brand:hover {
+  text-decoration: none;
+}
+
+.app-brand-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: var(--app-logo-bg);
+  color: #FFFFFF;
+  box-shadow: var(--app-logo-shadow);
+  transition: transform 0.2s ease;
+}
+
+.app-brand:hover .app-brand-logo {
+  transform: scale(1.04);
+}
+
+.app-brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.app-brand-title {
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--app-text);
+}
+
+.app-brand-tag {
+  margin-top: 2px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--app-text-muted);
+}
+
+.app-navbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* Round buttons: theme toggle and notification bell */
+.app-icon-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: 9999px;
+  border: 1px solid var(--app-chip-border);
+  background: var(--app-chip-bg);
+  color: var(--app-text);
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(11, 27, 61, 0.08);
+  transition: transform 0.2s ease, border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+}
+
+.app-icon-btn:hover {
+  transform: scale(1.05);
+  border-color: var(--app-accent);
+  color: var(--app-accent);
+}
+
+.app-icon-btn:focus-visible,
+.app-user-chip:focus-visible,
+.app-signout:focus-visible,
+.app-tab:focus-visible,
+.app-brand:focus-visible {
+  outline: 2px solid var(--app-focus);
+  outline-offset: 2px;
+}
+
+.app-icon-btn svg {
+  width: 18px;
+  height: 18px;
+  transition: transform 0.25s ease;
+}
+
+.app-icon-btn:hover svg {
+  transform: rotate(12deg);
+}
+
+/* The bell keeps its text for screen readers, shown only as an icon */
+.app-bell .bell-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.app-bell .bell-badge {
+  position: absolute;
+  top: -5px;
+  right: -6px;
+  min-width: 18px;
+  padding: 0 5px;
+  font-size: 11px;
+  line-height: 18px;
+  border: 2px solid var(--app-navbar-bg);
+  box-sizing: content-box;
+}
+
+.app-user-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 4px 12px 4px 5px;
+  border-radius: 9999px;
+  border: 1px solid var(--app-chip-border);
+  background: var(--app-chip-bg);
+  color: var(--app-text);
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.app-user-chip:hover {
+  border-color: var(--app-accent);
+}
+
+.app-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--app-logo-bg);
+  color: #FFFFFF;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.app-avatar.role-admin {
+  background: #B45309;
+}
+
+.app-avatar.role-staff {
+  background: #047857;
+}
+
+.app-user-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  text-align: left;
+  line-height: 1.2;
+}
+
+.app-user-name {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.app-user-role {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--app-text-muted);
+}
+
+.app-signout {
+  padding: 7px 14px;
+  border-radius: 9999px;
+  border: 1px solid #FECACA;
+  background: rgba(254, 242, 242, 0.9);
+  color: #DC2626;
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.app-signout:hover {
+  background: #FEE2E2;
+  color: #B91C1C;
+}
+
+.app-dark .app-signout {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.12);
+  color: #FCA5A5;
+}
+
+.app-dark .app-signout:hover {
+  background: rgba(239, 68, 68, 0.22);
+  color: #FECACA;
+}
+
+/* --------------------------------------------------------------------------
+   Tab bar: sticky glass strip of pill links under the navbar
+   -------------------------------------------------------------------------- */
+.app-tabbar {
+  position: sticky;
+  top: var(--app-navbar-height, 67px);
+  z-index: 1050;
+  background: var(--app-tabbar-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--app-tabbar-border);
+}
+
+.app-tabbar-inner {
+  display: flex;
+  gap: 2px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.app-tabbar-inner::-webkit-scrollbar {
+  display: none;
+}
+
+.app-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 8px 12px;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  color: var(--app-text);
+  font-size: 0.86rem;
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.app-tab svg {
+  font-size: 1.1rem;
+  width: 1.1rem;
+  height: 1.1rem;
+  opacity: 0.8;
+}
+
+.app-tab:hover {
+  background: var(--app-tab-hover);
+  color: var(--app-text);
+  text-decoration: none;
+}
+
+.app-tab.active {
+  background: #0B1B3D;
+  color: #FFFFFF;
+  box-shadow: 0 4px 12px rgba(11, 27, 61, 0.25);
+}
+
+.app-tab.active svg {
+  opacity: 1;
+}
+
+.app-dark .app-tab.active {
+  background: rgba(56, 189, 248, 0.14);
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #38BDF8;
+  box-shadow: 0 0 18px rgba(56, 189, 248, 0.25);
+}
+
+/* --------------------------------------------------------------------------
+   Content
+   -------------------------------------------------------------------------- */
+.app-main {
+  flex-grow: 1;
+  width: 100%;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 32px 24px 64px;
+}
+
+/* --------------------------------------------------------------------------
+   Footer
+   -------------------------------------------------------------------------- */
+.app-footer {
+  margin-top: auto;
+  background: var(--app-footer-bg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  color: #CBD5E1;
+}
+
+.app-footer-inner {
+  padding-top: 32px;
+  padding-bottom: 24px;
+}
+
+.app-footer-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.app-footer-name {
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #FFFFFF;
+}
+
+.app-footer-tagline {
+  margin: 4px 0 0;
+  font-size: 0.86rem;
+  color: #CBD5E1;
+}
+
+.app-footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.app-footer-links a {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: #E2E8F0;
+  text-decoration: none;
+}
+
+.app-footer-links a:hover {
+  color: #FFFFFF;
+  text-decoration: underline;
+}
+
+.app-dark .app-footer-links a:hover {
+  color: #38BDF8;
+}
+
+.app-footer-bottom {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  padding-top: 18px;
+  font-size: 0.76rem;
+  color: #94A3B8;
+}
+
+/* --------------------------------------------------------------------------
+   Small screens
+   -------------------------------------------------------------------------- */
+@media (max-width: 760px) {
+  .app-navbar-inner,
+  .app-tabbar-inner,
+  .app-footer-inner {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .app-main {
+    padding: 24px 16px 48px;
+  }
+
+  /* fade the right edge so it's clear the tabs scroll */
+  .app-tabbar-inner {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
+  }
+
+  .app-brand-tag,
+  .app-user-text {
+    display: none;
+  }
+
+  .app-user-chip {
+    padding: 4px;
+  }
+
+  .app-footer-top {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .app-footer-links {
+    justify-content: center;
+  }
+}
+
+@media (max-width: 420px) {
+  .app-brand-text {
+    display: none;
+  }
+}

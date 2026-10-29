@@ -1,118 +1,171 @@
-import React, { useEffect } from 'react';
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import {
-  AppBar, Toolbar, Typography, Box, Tabs, Tab, Container, Button, Chip, Paper
-} from '@mui/material';
+import React, { useEffect, useMemo, useRef } from 'react';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
-import DirectionsTransitIcon from '@mui/icons-material/DirectionsTransit';
-import AccountCircleIcon from '@mui/icons-material/AccountCircle';
-import muiTheme from '../theme';
+import { getMuiTheme } from '../theme';
 import { useAuth } from '../context/useAuth';
+import { useTheme } from '../context/useTheme';
 import { RouterBridge } from '../router';
 import { TABS } from '../tabs';
+import '../styles/app.css';
 
 /**
- * Layout of the logged-in app: header with the user and log out, one tab per
+ * Layout of the logged-in app: navbar with the user and sign out, one tab per
  * screen the user's role may use (tabs.jsx), and the current screen below.
  * Login, registration and password pages (Team 1) are outside it, in App.jsx.
  *
- * The screens are Material UI in a dark theme. Team 1's account and admin
- * cards use their own CSS, which follows the data-theme attribute; it is
- * switched to dark while the shell is shown so both look the same, and set
- * back to the user's choice on the login pages.
+ * It looks like the login page (railway photo, glass, navy or slate) but has
+ * its own markup and styles (styles/app.css, theme.js). It follows the same
+ * light/dark choice as the login page.
  */
 export default function AppShell() {
   const { user, logoutUser } = useAuth();
+  const { isDark } = useTheme();
   const location = useLocation();
   const nav = useNavigate();
+  const muiTheme = useMemo(() => getMuiTheme(isDark ? 'dark' : 'light'), [isDark]);
+  const tabbar = useRef(null);
 
-  useEffect(() => {
-    const root = document.documentElement;
-    const previous = root.getAttribute('data-theme');
-    root.setAttribute('data-theme', 'dark');
-    return () => {
-      if (previous) root.setAttribute('data-theme', previous);
-    };
-  }, []);
-
-  const tabs = TABS.filter((t) => !t.headerWidget && (!t.roles || t.roles.includes(user.role)));
+  const allowed = (t) => !t.roles || t.roles.includes(user.role);
+  const tabs = TABS.filter((t) => !t.headerWidget && allowed(t));
+  const widgets = TABS.filter((t) => t.headerWidget && allowed(t));
   const first = location.pathname.split('/')[1] || '';
   const current = tabs.find((t) => t.path.slice(1) === first || t.match?.includes(first));
+
+  // On narrow screens the tab bar scrolls: keep the current tab in view
+  useEffect(() => {
+    tabbar.current?.querySelector('.app-tab.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [current?.path]);
 
   return (
     <ThemeProvider theme={muiTheme}>
       <CssBaseline />
       <RouterBridge />
-      <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
-        <AppBar position="static" elevation={0} sx={{ bgcolor: '#0b111e', borderBottom: '1px solid #1e293b' }}>
-          <Toolbar sx={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 1, py: 1 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <DirectionsTransitIcon sx={{ fontSize: 28, color: '#f8fafc', mr: 1.5 }} />
-              <Typography variant="h6" component="div" sx={{ fontWeight: 800, letterSpacing: '1px', color: '#f8fafc' }}>
-                SAFAR · RAILWAY RESERVATION
-              </Typography>
-            </Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-              {TABS.filter((t) => t.headerWidget && (!t.roles || t.roles.includes(user.role))).map((t) => (
+      <div className={`app-root ${isDark ? 'app-dark' : 'app-light'}`}>
+        <div className="app-bg" aria-hidden="true" />
+        <div className="app-bg-overlay" aria-hidden="true" />
+
+        <header className="app-navbar">
+          <div className="app-navbar-inner">
+            <Link to="/search" className="app-brand" aria-label="Safar home">
+              <span className="app-brand-logo" aria-hidden="true"><TrainLogo /></span>
+              <span className="app-brand-text">
+                <span className="app-brand-title">Safar</span>
+                <span className="app-brand-tag">Railway Reservation</span>
+              </span>
+            </Link>
+
+            <div className="app-navbar-actions">
+              <ThemeButton />
+              {widgets.map((t) => (
                 <t.headerWidget key={t.path} user={user} onClick={() => nav(t.path)} />
               ))}
-              <Chip
-                icon={<AccountCircleIcon style={{ color: '#fff' }} />}
-                label={`${user.name || user.email} · ${user.role}`}
-                color={user.role === 'ADMIN' ? 'error' : user.role === 'STAFF' ? 'warning' : 'primary'}
+              <button
+                type="button"
+                className="app-user-chip"
                 onClick={() => nav(user.role === 'ADMIN' ? '/admin' : '/account')}
-                sx={{ fontWeight: 600, color: '#fff', maxWidth: { xs: 220, sm: 'none' } }}
-              />
-              <Button
-                variant="outlined"
-                size="small"
-                onClick={logoutUser}
-                sx={{ color: '#f8fafc', borderColor: '#22324e' }}
+                title="Your account"
               >
-                Log out
-              </Button>
-            </Box>
-          </Toolbar>
-        </AppBar>
+                <span className={`app-avatar role-${user.role.toLowerCase()}`} aria-hidden="true">
+                  {(user.name || user.email || 'U')[0].toUpperCase()}
+                </span>
+                <span className="app-user-text">
+                  <span className="app-user-name">{user.name || user.email}</span>
+                  <span className="app-user-role">{user.role}</span>
+                </span>
+              </button>
+              <button type="button" className="app-signout" onClick={logoutUser}>
+                Sign Out
+              </button>
+            </div>
+          </div>
+        </header>
 
-        <Paper elevation={0} square sx={{ bgcolor: '#0f172a', borderBottom: '1px solid #1e293b' }}>
-          <Container maxWidth="xl">
-            <Tabs
-              value={current ? current.path : false}
-              onChange={(e, value) => nav(value)}
-              textColor="secondary"
-              indicatorColor="secondary"
-              variant="scrollable"
-              scrollButtons="auto"
-              sx={{
-                '& .MuiTab-root': { color: '#94a3b8', fontWeight: 600, py: 2, px: 1.5, minWidth: 0, '&.Mui-selected': { color: '#38bdf8' } },
-                '& .MuiTabs-indicator': { backgroundColor: '#38bdf8', height: 3, borderRadius: '3px 3px 0 0' },
-              }}
-            >
-              {tabs.map((t) => (
-                <Tab
+        <nav className="app-tabbar" aria-label="Sections">
+          <div className="app-tabbar-inner" ref={tabbar}>
+            {tabs.map((t) => {
+              const active = current?.path === t.path;
+              return (
+                <Link
                   key={t.path}
-                  value={t.path}
-                  icon={user.role !== 'CUSTOMER' && t.staffIcon ? t.staffIcon : t.icon}
-                  iconPosition="start"
-                  label={t.label}
-                />
-              ))}
-            </Tabs>
-          </Container>
-        </Paper>
+                  to={t.path}
+                  className={`app-tab ${active ? 'active' : ''}`}
+                  aria-current={active ? 'page' : undefined}
+                >
+                  {user.role !== 'CUSTOMER' && t.staffIcon ? t.staffIcon : t.icon}
+                  {t.label}
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
 
-        <Container maxWidth="lg" sx={{ flexGrow: 1, py: 3 }}>
+        <main className="app-main">
           <Outlet />
-        </Container>
+        </main>
 
-        <Box sx={{ py: 2.5, textAlign: 'center', bgcolor: '#0b111e', borderTop: '1px solid #1e293b', mt: 'auto' }}>
-          <Typography variant="body2" sx={{ color: '#64748b', fontSize: '0.85rem' }}>
-            Railway Reservation and Management System
-          </Typography>
-        </Box>
-      </Box>
+        <footer className="app-footer">
+          <div className="app-footer-inner">
+            <div className="app-footer-top">
+              <div>
+                <div className="app-footer-name">SAFAR · RAILWAY RESERVATION</div>
+                <p className="app-footer-tagline">Let every journey take you somewhere wonderful.</p>
+              </div>
+              <div className="app-footer-links">
+                {tabs.slice(0, 5).map((t) => <Link key={t.path} to={t.path}>{t.label}</Link>)}
+              </div>
+            </div>
+            <div className="app-footer-bottom">
+              <span>Railway Reservation and Management System</span>
+              <span aria-hidden="true">·</span>
+              <span>Rail Madad helpline 139</span>
+              <span aria-hidden="true">·</span>
+              <span>All rights reserved</span>
+            </div>
+          </div>
+        </footer>
+      </div>
     </ThemeProvider>
+  );
+}
+
+// Light/dark switch. Uses the same setting as the login page's toggle.
+function ThemeButton() {
+  const { isDark, toggleTheme } = useTheme();
+  const label = isDark ? 'Switch to light mode' : 'Switch to dark mode';
+  return (
+    <button type="button" className="app-icon-btn" onClick={toggleTheme} aria-label={label} title={label}>
+      {isDark ? (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="5" />
+          <line x1="12" y1="1" x2="12" y2="3" />
+          <line x1="12" y1="21" x2="12" y2="23" />
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+          <line x1="1" y1="12" x2="3" y2="12" />
+          <line x1="21" y1="12" x2="23" y2="12" />
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+        </svg>
+      ) : (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+        </svg>
+      )}
+    </button>
+  );
+}
+
+function TrainLogo() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="3" width="16" height="14" rx="2" />
+      <path d="M4 11h16" />
+      <path d="M12 3v8" />
+      <path d="m8 17-2 4" />
+      <path d="m16 17 2 4" />
+      <circle cx="9" cy="14" r="1" />
+      <circle cx="15" cy="14" r="1" />
+    </svg>
   );
 }

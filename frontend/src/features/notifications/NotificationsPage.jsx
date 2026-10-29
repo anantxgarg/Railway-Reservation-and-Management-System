@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Box, Button, Card, CardContent, Chip, Divider, Stack, Typography } from "@mui/material";
+import { Alert, Box, Button, Chip, Stack, Typography } from "@mui/material";
+import { alpha } from "@mui/material/styles";
+import DoneAllIcon from "@mui/icons-material/DoneAll";
 import NotificationsIcon from "@mui/icons-material/Notifications";
+import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
+import ScienceIcon from "@mui/icons-material/Science";
 import { request } from "../team6Http";
-import "./notifications.css";
+import { EmptyState, GlassSection, IconTile, PageHeader } from "../../components/ui";
 
 // ---- Calls to the backend's notification module (NotificationController and DemoController) ----
 
@@ -111,51 +115,66 @@ export default function NotificationsPage({ userId, onOpenFeedback }) {
   }
 
   return (
-    <Card className="panel">
-      <CardContent sx={{ p: 3 }}>
-        {notice && (
-          <Alert severity={notice.severity} onClose={() => setNotice(null)} sx={{ mb: 2 }}>
-            {notice.text}
-          </Alert>
+    <>
+      <PageHeader
+        tag="Notifications"
+        title="Notification centre"
+        subtitle="All your updates in one place, newest first"
+        actions={(
+          <Button variant="contained" startIcon={<DoneAllIcon />} onClick={markAllRead} disabled={!unread}>
+            Mark all read
+          </Button>
         )}
-        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
-          <Box>
-            <Typography variant="h5" fontWeight={800}>Notification centre</Typography>
-            <Typography color="text.secondary" variant="body2">All your updates in one place, newest first</Typography>
-          </Box>
-          <Button onClick={markAllRead} disabled={!unread}>Mark all read</Button>
-        </Stack>
-        {notifications.length === 0 && (
-          <Typography color="text.secondary" sx={{ py: 2 }}>No notifications yet. Book and pay for a ticket, and updates about it appear here.</Typography>
-        )}
-        {notifications.map((n) => (
-          <Box key={n.id} className={`notification-row ${n.read ? "" : "unread"}`}
-            onClick={() => openNotification(n)} sx={{ cursor: "pointer" }}>
-            <Box className="notification-icon"><NotificationsIcon /></Box>
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                <Typography fontWeight={800}>{n.title}</Typography>
-                {!n.read && <Chip label="NEW" color="primary" size="small" />}
-              </Stack>
-              <Typography sx={{ mt: 0.5 }}>{n.message}</Typography>
-              <Typography variant="caption" color="text.secondary">
-                {formatTime(n.createdAt)} · from {n.sourceTeam}
-              </Typography>
+      />
+      {notice && (
+        <Alert severity={notice.severity} onClose={() => setNotice(null)} sx={{ mb: 3 }}>
+          {notice.text}
+        </Alert>
+      )}
+      {notifications.length === 0 ? (
+        <EmptyState
+          icon={<NotificationsNoneIcon />}
+          title="No notifications yet"
+          text="Book and pay for a ticket, and updates about it appear here."
+        />
+      ) : (
+        <GlassSection padding={1.5}>
+          {notifications.map((n) => (
+            <Box
+              key={n.id}
+              onClick={() => openNotification(n)}
+              sx={{
+                display: "flex", alignItems: "center", gap: 2, px: 1.5, py: 1.75, borderRadius: "12px", cursor: "pointer",
+                bgcolor: (t) => (n.read ? "transparent" : alpha(t.app.accent, t.app.mode === "dark" ? 0.1 : 0.06)),
+                transition: "background-color 0.2s ease",
+                "&:hover": { bgcolor: (t) => alpha(t.app.accent, t.app.mode === "dark" ? 0.14 : 0.09) },
+                "& + &": { mt: 0.5 },
+              }}
+            >
+              <IconTile size={42}><NotificationsIcon /></IconTile>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                  <Typography fontWeight={n.read ? 600 : 800}>{n.title}</Typography>
+                  {!n.read && <Chip label="NEW" color="primary" size="small" />}
+                </Stack>
+                <Typography sx={{ mt: 0.5, color: n.read ? "text.secondary" : "text.primary" }}>{n.message}</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {formatTime(n.createdAt)} · from {n.sourceTeam}
+                </Typography>
+              </Box>
             </Box>
-          </Box>
-        ))}
-        {/* Only when the frontend is started with VITE_TEAM6_DEMO=true and the backend with TEAM6_DEMO=true */}
-        {DEMO && (
-          <>
-            <Divider sx={{ my: 3 }} />
-            <Typography fontWeight={700} sx={{ mb: 1 }}>Demo controls</Typography>
-            <Stack direction="row" flexWrap="wrap" gap={1}>
-              <Button variant="outlined" onClick={handleSimulate}>Simulate full journey (7 notifications)</Button>
-              <Button variant="outlined" color="error" onClick={handleReset}>Reset demo data (admins)</Button>
-            </Stack>
-          </>
-        )}
-      </CardContent>
-    </Card>
+          ))}
+        </GlassSection>
+      )}
+      {/* Only when the frontend is started with VITE_TEAM6_DEMO=true and the backend with TEAM6_DEMO=true */}
+      {DEMO && (
+        <GlassSection title="Demo controls" icon={<ScienceIcon />}>
+          <Stack direction="row" flexWrap="wrap" gap={1} sx={{ mt: 2 }}>
+            <Button variant="outlined" onClick={handleSimulate}>Simulate full journey (7 notifications)</Button>
+            <Button variant="outlined" color="error" onClick={handleReset}>Reset demo data (admins)</Button>
+          </Stack>
+        </GlassSection>
+      )}
+    </>
   );
 }

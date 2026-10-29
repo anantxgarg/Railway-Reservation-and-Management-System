@@ -37,10 +37,15 @@ export default function NotificationBell({ userId, onClick, className = "" }) {
   }, [userId]);
 
   return (
-    <button type="button" className={`bell-button ${className}`} onClick={onClick}>
+    <button
+      type="button"
+      className={`bell-button ${className}`}
+      onClick={onClick}
+      title={unread > 0 ? `${unread} unread notifications` : 'Notifications'}
+    >
       <NotificationsIcon fontSize="small" />
-      Notifications
-      {unread > 0 && <span className="bell-badge">{unread}</span>}
+      <span className="bell-label">Notifications</span>
+      {unread > 0 && <span className="bell-badge" aria-label={`${unread} unread`}>{unread}</span>}
     </button>
   );
 }

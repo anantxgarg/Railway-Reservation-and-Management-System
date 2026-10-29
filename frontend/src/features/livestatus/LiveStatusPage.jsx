@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import {
-  Alert, Box, Button, Card, CardContent, Chip, Stack, TextField, Typography,
-} from "@mui/material";
+import { Alert, Box, Button, Chip, Stack, TextField, Typography } from "@mui/material";
+import { alpha } from "@mui/material/styles";
+import ConfirmationNumberIcon from "@mui/icons-material/ConfirmationNumber";
+import TrainIcon from "@mui/icons-material/Train";
 import { networkApi } from "../../api";
+import { GlassSection, IconTile, Mono, PageHeader } from "../../components/ui";
 import "./livestatus.css";
 
 // ---- Where the data comes from ----
@@ -41,6 +43,8 @@ async function getLiveStatus(pnr) {
       const expected = stop.expectedDeparture || stop.expectedArrival;
       return {
         key: stop.seq,
+        code: stop.status,
+        isDestination: stop.seq === s.destinationSeq,
         name: `${stop.stationName} (${stop.stationCode})`,
         role: stop.seq === s.boardingSeq ? "You board here" : stop.seq === s.destinationSeq ? "You get off here" : null,
         scheduled: clock(scheduled),
@@ -87,56 +91,102 @@ export default function LiveStatusPage({ startPnr = "" }) {
   }
 
   return (
-    <Card className="panel">
-      <CardContent sx={{ p: 3 }}>
-        <Typography variant="h5" fontWeight={800}>Live train status</Typography>
-        <Typography color="text.secondary" sx={{ mt: 1, mb: 3 }}>
-          Enter a PNR number to see where its train is, station by station.
-        </Typography>
+    <>
+      <PageHeader
+        tag="Live status"
+        title="Live train status"
+        subtitle="Enter a PNR number to see where its train is, station by station."
+      />
+      <GlassSection title="Check a PNR" subtitle="The 10-digit number on your ticket" icon={<ConfirmationNumberIcon />}>
         <Box component="form" onSubmit={handleSubmit}
-          sx={{ display: "flex", gap: 1, mb: 3, flexWrap: "wrap" }}>
+          sx={{ display: "flex", gap: 1.5, flexWrap: "wrap", mt: 2.5 }}>
           <TextField label="10-digit PNR number" value={pnr}
             onChange={(e) => setPnr(e.target.value.replace(/\D/g, "").slice(0, 10))}
             inputProps={{ maxLength: 10 }} required sx={{ flex: 1, minWidth: 220 }} />
           <Button type="submit" variant="contained" size="large" disabled={pnr.length !== 10}>Check status</Button>
         </Box>
-        {error && <Alert severity="warning" sx={{ mb: 2 }}>{error}</Alert>}
-        {status && (
-          <>
-            <Stack direction="row" justifyContent="space-between" flexWrap="wrap" gap={1} sx={{ mb: 2 }}>
-              <Box>
-                <Typography fontWeight={800}>PNR: {status.pnr}</Typography>
+        {error && <Alert severity="warning" sx={{ mt: 2 }}>{error}</Alert>}
+      </GlassSection>
+      {status && (
+        <GlassSection>
+          <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={2} sx={{ mb: 2.5 }}>
+            <Stack direction="row" alignItems="center" spacing={2} sx={{ minWidth: 0 }}>
+              <IconTile><TrainIcon /></IconTile>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography fontWeight={800}>PNR: <Mono>{status.pnr}</Mono></Typography>
                 <Typography variant="body2" color="text.secondary">{status.train} · leaves {status.runDate}</Typography>
               </Box>
-              <Chip label={status.delayText} color={status.delayColor} />
             </Stack>
-            <Box sx={{ overflowX: "auto" }}>
-              <Box sx={{ minWidth: 580 }}>
-                <Box className="station-table table-header">
-                  <Typography>Station</Typography><Typography>Scheduled</Typography>
-                  <Typography>Actual / Expected</Typography><Typography>Delay</Typography>
-                </Box>
-                {status.stations.map((s) => (
-                  <Box className="station-table" key={s.key}>
-                    <Box>
-                      <Typography fontWeight={700}>{s.name}</Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {s.status}{s.role ? ` · ${s.role}` : ""}
-                      </Typography>
-                    </Box>
-                    <Typography>{s.scheduled}</Typography>
-                    <Typography>{s.actual}</Typography>
-                    <Chip size="small" label={`${s.delay} min`} color={s.delay ? "warning" : "success"} />
-                  </Box>
-                ))}
+            <Chip label={status.delayText} color={status.delayColor} />
+          </Stack>
+          <Box
+            sx={{
+              overflowX: "auto", borderRadius: "12px",
+              bgcolor: (t) => t.app.glassNested, border: (t) => `1px solid ${t.app.divider}`,
+            }}
+          >
+            <Box sx={{ minWidth: 580 }}>
+              <Box className="station-table" sx={{ ...headerRowSx, py: 1.25 }}>
+                <Box>Station</Box><Box>Scheduled</Box><Box>Actual / Expected</Box><Box>Delay</Box>
               </Box>
+              {status.stations.map((s, i) => (
+                <StationRow key={s.key} stop={s} first={i === 0} last={i === status.stations.length - 1} />
+              ))}
             </Box>
-            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 2 }}>
-              Worked out from the timetable and the delay reported by railway staff. Refreshes every minute.
-            </Typography>
-          </>
-        )}
-      </CardContent>
-    </Card>
+          </Box>
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 2 }}>
+            Worked out from the timetable and the delay reported by railway staff. Refreshes every minute.
+          </Typography>
+        </GlassSection>
+      )}
+    </>
+  );
+}
+
+// Same look as the theme's table header cells
+const headerRowSx = {
+  fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em",
+  color: "text.secondary", bgcolor: (t) => alpha(t.app.textPrimary, t.app.mode === "dark" ? 0.04 : 0.03),
+  borderBottom: "1px solid", borderColor: "divider",
+};
+
+// One station: a dot on the route line (accent; green for the stop the train is at and for
+// where you get off), the times, and the delay. Stations the train has left are dimmed.
+function StationRow({ stop, first, last }) {
+  const passed = stop.code === "DEPARTED";
+  const highlight = stop.code === "AT_STATION" || stop.isDestination;
+  const lineSx = {
+    position: "absolute", left: "50%", width: 2, ml: "-1px", bgcolor: (t) => alpha(t.app.accent, 0.3),
+  };
+  return (
+    <Box
+      className="station-table"
+      sx={{ borderBottom: "1px solid", borderColor: "divider", "&:last-child": { borderBottom: 0 }, opacity: passed ? 0.5 : 1 }}
+    >
+      <Box sx={{ display: "flex", gap: 1.5, alignItems: "stretch" }}>
+        <Box sx={{ position: "relative", width: 14, flexShrink: 0 }}>
+          {!first && <Box sx={{ ...lineSx, top: 0, height: "50%" }} />}
+          {!last && <Box sx={{ ...lineSx, top: "50%", bottom: 0 }} />}
+          <Box
+            sx={{
+              position: "absolute", top: "50%", left: 0, mt: "-7px", width: 14, height: 14, borderRadius: "50%",
+              boxSizing: "border-box", border: "3px solid",
+              bgcolor: (t) => (highlight ? t.palette.success.main : t.app.accent),
+              borderColor: (t) => alpha(highlight ? t.palette.success.main : t.app.accent, 0.3),
+              backgroundClip: "padding-box",
+            }}
+          />
+        </Box>
+        <Box sx={{ py: 1.75, minWidth: 0 }}>
+          <Typography fontWeight={700}>{stop.name}</Typography>
+          <Typography variant="caption" color="text.secondary">
+            {stop.status}{stop.role ? ` · ${stop.role}` : ""}
+          </Typography>
+        </Box>
+      </Box>
+      <Typography>{stop.scheduled}</Typography>
+      <Typography>{stop.actual}</Typography>
+      <Box><Chip size="small" label={`${stop.delay} min`} color={stop.delay ? "warning" : "success"} /></Box>
+    </Box>
   );
 }
