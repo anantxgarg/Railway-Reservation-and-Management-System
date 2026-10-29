@@ -1,35 +1,4 @@
-/* Colours are tints, so the page works in the app's dark theme. Styles for NotificationsPage and NotificationBell only. They import this file themselves. */
-
-.panel {
-  border: 1px solid rgba(148, 163, 184, .22);
-  border-radius: 16px !important;
-  box-shadow: 0 5px 20px rgba(20, 45, 80, .045) !important;
-}
-
-.notification-row {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 17px 10px;
-  border-bottom: 1px solid rgba(148, 163, 184, .16);
-  border-radius: 8px;
-}
-
-.notification-row.unread {
-  background: rgba(56, 189, 248, .10);
-}
-
-.notification-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
-  color: #38bdf8;
-  background: rgba(56, 189, 248, .15);
-  flex-shrink: 0;
-}
+/* Styles for NotificationBell only (the page itself is styled in NotificationsPage.jsx). */
 
 /* The bell button: icon, text and badge in one row */
 .bell-button {
@@ -38,20 +7,7 @@
   gap: 8px;
 }
 
-/* In the app's header (AppShell) */
-.bell-button.header-bell {
-  padding: 6px 12px;
-  border: 1px solid #22324e;
-  border-radius: 8px;
-  background: transparent;
-  color: #f8fafc;
-  font-weight: 600;
-  font-size: 0.875rem;
-}
-
-.bell-button.header-bell:hover {
-  background: rgba(56, 189, 248, .10);
-}
+/* In the app's navbar it's a round icon button: styles/app.css (.app-bell) */
 
 /* The red unread count. It blinks while it's shown. */
 .bell-badge {

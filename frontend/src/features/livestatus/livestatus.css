@@ -1,22 +1,10 @@
-/* Colours are tints, so the page works in the app's dark theme. Styles for LiveStatusPage only. It imports this file itself, so it looks the same in any app. */
-
-.panel {
-  border: 1px solid rgba(148, 163, 184, .22);
-  border-radius: 16px !important;
-  box-shadow: 0 5px 20px rgba(20, 45, 80, .045) !important;
-}
+/* Layout of the station list. Colours come from the theme (sx), so it works in light and dark. Styles for LiveStatusPage only. It imports this file itself, so it looks the same in any app. */
 
 .station-table {
   display: grid;
   grid-template-columns: 2fr 1fr 1.3fr .7fr;
   align-items: center;
-  gap: 12px;
-  padding: 15px 12px;
-  border-bottom: 1px solid rgba(148, 163, 184, .16);
-}
-
-.table-header {
-  font-weight: 700;
-  background: rgba(148, 163, 184, .12);
-  border-radius: 8px;
+  column-gap: 12px;
+  padding-left: 14px;
+  padding-right: 14px;
 }

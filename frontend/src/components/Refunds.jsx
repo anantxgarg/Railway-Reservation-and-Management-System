@@ -1,12 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Box, Card, CardContent, Typography, TextField, Button, Grid,
+  Box, Typography, TextField, Button, Grid,
   Alert, Divider, Table, TableBody, TableCell, TableContainer,
-  TableHead, TableRow, Paper, Chip, CircularProgress
+  TableHead, TableRow, Chip, CircularProgress
 } from '@mui/material';
 import UndoIcon from '@mui/icons-material/Undo';
 import CalculateIcon from '@mui/icons-material/Calculate';
+import HistoryIcon from '@mui/icons-material/History';
 import { api } from '../api';
+import { PageHeader, GlassSection, EmptyState, LoadingCard, Mono } from './ui';
+
+/**
+ * Cancel a booking and get a refund: the policy, a form that quotes the
+ * refund for a PNR, and the customer's refund history. Shown to customers
+ * and staff; only customers have refunds of their own to list.
+ */
 
 export default function Refunds({ user }) {
   const [pnr, setPnr] = useState('');
@@ -77,157 +85,142 @@ export default function Refunds({ user }) {
   };
 
   return (
-    <Box sx={{ maxWidth: 960, mx: 'auto', mt: 1, mb: 5 }}>
-      <Paper elevation={0} sx={{ p: 3, mb: 3, bgcolor: '#111a2e', borderRadius: 3, border: '1px solid #1e293b' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-          <UndoIcon sx={{ fontSize: 32, color: 'primary.light', mr: 1.5 }} />
-          <Typography variant="h5" sx={{ fontWeight: 700, color: '#f8fafc' }}>
-            Ticket Cancellation & Refund Policy
-          </Typography>
-        </Box>
-        <Typography variant="body2" sx={{ color: '#94a3b8' }}>
-          Official Railway cancellation refund slabs: &gt;48 hrs: 90% | 24–48 hrs: 75% | 4–24 hrs: 50% | &lt;4 hrs: 0%
-        </Typography>
-      </Paper>
+    <Box>
+      <PageHeader
+        tag="Refunds"
+        title="Ticket cancellation & refunds"
+        subtitle="Official Railway cancellation refund slabs: >48 hrs: 90% | 24–48 hrs: 75% | 4–24 hrs: 50% | <4 hrs: 0%"
+      />
 
-      {error && <Alert severity="error" sx={{ mb: 3, bgcolor: 'rgba(239, 68, 68, 0.1)', color: '#fca5a5' }} onClose={() => setError(null)}>{error}</Alert>}
-      {successMsg && <Alert severity="success" sx={{ mb: 3, bgcolor: 'rgba(74, 222, 128, 0.1)', color: '#86efac' }} onClose={() => setSuccessMsg(null)}>{successMsg}</Alert>}
+      {error && <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>{error}</Alert>}
+      {successMsg && <Alert severity="success" sx={{ mb: 3 }} onClose={() => setSuccessMsg(null)}>{successMsg}</Alert>}
 
-      <Grid container spacing={3} sx={{ mb: 4 }}>
+      <Grid container spacing={3} sx={{ mb: 1 }}>
         <Grid item xs={12} md={6}>
-          <Card variant="outlined">
-            <CardContent sx={{ p: 3 }}>
-              <Typography variant="h6" gutterBottom sx={{ color: '#f8fafc', fontWeight: 600 }}>
-                Check Refund Eligibility
-              </Typography>
-              <form onSubmit={handlePreviewRefund}>
-                <TextField
-                  fullWidth
-                  label="PNR"
-                  value={pnr}
-                  onChange={(e) => setPnr(e.target.value.replace(/\D/g, ''))}
-                  placeholder="10-digit PNR"
-                  required
-                  inputProps={{ inputMode: 'numeric', maxLength: 10 }}
-                  helperText="Cancels the whole booking. To cancel some passengers, open the booking from PNR status."
-                  size="small"
-                  sx={{ mb: 2 }}
-                />
-                <TextField
-                  fullWidth
-                  label="Cancellation Reason"
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  size="small"
-                  sx={{ mb: 2 }}
-                />
-                <Button
-                  fullWidth
-                  variant="contained"
-                  startIcon={loadingPreview ? <CircularProgress size={20} color="inherit" /> : <CalculateIcon />}
-                  type="submit"
-                  disabled={loadingPreview || !pnr}
-                  sx={{ py: 1.2 }}
-                >
-                  {loadingPreview ? 'Calculating...' : 'Preview Cancellation Refund'}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
+          <GlassSection title="Check Refund Eligibility" icon={<CalculateIcon />} sx={{ height: 'calc(100% - 24px)' }}>
+            <form onSubmit={handlePreviewRefund}>
+              <TextField
+                fullWidth
+                label="PNR"
+                value={pnr}
+                onChange={(e) => setPnr(e.target.value.replace(/\D/g, ''))}
+                placeholder="10-digit PNR"
+                required
+                inputProps={{ inputMode: 'numeric', maxLength: 10 }}
+                helperText="Cancels the whole booking. To cancel some passengers, open the booking from PNR status."
+                size="small"
+                sx={{ mb: 2 }}
+              />
+              <TextField
+                fullWidth
+                label="Cancellation Reason"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                size="small"
+                sx={{ mb: 2 }}
+              />
+              <Button
+                fullWidth
+                variant="contained"
+                startIcon={loadingPreview ? <CircularProgress size={20} color="inherit" /> : <CalculateIcon />}
+                type="submit"
+                disabled={loadingPreview || !pnr}
+                sx={{ py: 1.2 }}
+              >
+                {loadingPreview ? 'Calculating...' : 'Preview Cancellation Refund'}
+              </Button>
+            </form>
+          </GlassSection>
         </Grid>
 
         <Grid item xs={12} md={6}>
-          <Card variant="outlined" sx={{ height: '100%', bgcolor: preview ? '#0d1526' : '#111a2e' }}>
-            <CardContent sx={{ p: 3 }}>
-              <Typography variant="h6" gutterBottom sx={{ color: '#f8fafc', fontWeight: 600 }}>
-                Refund Calculation Quote
+          <GlassSection title="Refund Calculation Quote" icon={<UndoIcon />} sx={{ height: 'calc(100% - 24px)' }}>
+            {!preview ? (
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1, textAlign: 'center' }}>
+                Enter a PNR and click "Preview" to calculate the policy cancellation deductions.
               </Typography>
-              {!preview ? (
-                <Typography variant="body2" sx={{ color: '#64748b', mt: 4, textAlign: 'center' }}>
-                  Enter a PNR and click "Preview" to calculate the policy cancellation deductions.
-                </Typography>
-              ) : (
-                <Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                    <Typography variant="body2" sx={{ color: '#94a3b8' }}>Paid for the booking:</Typography>
-                    <Typography variant="body2" sx={{ color: '#f8fafc', fontWeight: 600 }}>₹{preview.paidAmount}</Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                    <Typography variant="body2" sx={{ color: '#94a3b8' }}>Refund Percentage:</Typography>
-                    <Chip label={`${Number(preview.refundPercent)}%`} color="primary" size="small" sx={{ fontWeight: 600 }} />
-                  </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                    <Typography variant="body2" sx={{ color: '#94a3b8' }}>Cancellation Fee:</Typography>
-                    <Typography variant="body2" sx={{ color: '#f87171' }}>- ₹{preview.cancellationCharge}</Typography>
-                  </Box>
-                  {preview.note && (
-                    <Typography variant="caption" sx={{ color: '#94a3b8', display: 'block', mb: 1 }}>{preview.note}</Typography>
-                  )}
-
-                  <Divider sx={{ my: 1.5, borderColor: '#1e293b' }} />
-
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-                    <Typography variant="h6" sx={{ color: '#f8fafc' }}>Refund Payable:</Typography>
-                    <Typography variant="h6" sx={{ color: '#4ade80', fontWeight: 700 }}>₹{preview.refundAmount}</Typography>
-                  </Box>
-
-                  <Button
-                    fullWidth
-                    variant="contained"
-                    color="secondary"
-                    onClick={handleExecuteRefund}
-                    disabled={submittingRefund}
-                    startIcon={submittingRefund ? <CircularProgress size={20} color="inherit" /> : <UndoIcon />}
-                    sx={{ py: 1.2 }}
-                  >
-                    {submittingRefund ? 'Processing Refund...' : 'Confirm Ticket Cancellation & Refund'}
-                  </Button>
+            ) : (
+              <Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                  <Typography variant="body2" color="text.secondary">Paid for the booking:</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>₹{preview.paidAmount}</Typography>
                 </Box>
-              )}
-            </CardContent>
-          </Card>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                  <Typography variant="body2" color="text.secondary">Refund Percentage:</Typography>
+                  <Chip label={`${Number(preview.refundPercent)}%`} color="primary" size="small" />
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                  <Typography variant="body2" color="text.secondary">Cancellation Fee:</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 700, color: 'error.main' }}>- ₹{preview.cancellationCharge}</Typography>
+                </Box>
+                {preview.note && (
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>{preview.note}</Typography>
+                )}
+
+                <Divider sx={{ my: 1.5 }} />
+
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                  <Typography variant="h6">Refund Payable:</Typography>
+                  <Typography variant="h6" sx={{ color: 'success.main', fontWeight: 800 }}>₹{preview.refundAmount}</Typography>
+                </Box>
+
+                <Button
+                  fullWidth
+                  variant="contained"
+                  color="secondary"
+                  onClick={handleExecuteRefund}
+                  disabled={submittingRefund}
+                  startIcon={submittingRefund ? <CircularProgress size={20} color="inherit" /> : <UndoIcon />}
+                  sx={{ py: 1.2 }}
+                >
+                  {submittingRefund ? 'Processing Refund...' : 'Confirm Ticket Cancellation & Refund'}
+                </Button>
+              </Box>
+            )}
+          </GlassSection>
         </Grid>
       </Grid>
 
       {/* Refund History Table */}
-      <Typography variant="h6" sx={{ mb: 2, color: '#f8fafc', fontWeight: 600 }}>
-        My Processed Refunds
-      </Typography>
       {loadingRefunds ? (
-        <CircularProgress size={24} />
+        <LoadingCard text="Loading refunds…" />
       ) : myRefunds.length === 0 ? (
-        <Card variant="outlined" sx={{ p: 4, textAlign: 'center' }}>
-          <Typography sx={{ color: '#94a3b8' }}>No refunds processed for this account yet.</Typography>
-        </Card>
+        <EmptyState
+          icon={<HistoryIcon />}
+          title="My Processed Refunds"
+          text="No refunds processed for this account yet."
+        />
       ) : (
-        <TableContainer component={Paper} variant="outlined" sx={{ bgcolor: '#111a2e', borderColor: '#1e293b' }}>
-          <Table size="small">
-            <TableHead sx={{ bgcolor: '#0b111e' }}>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>Refund ID</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>PNR</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>Refund Amount</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>Reason</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>Status</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {myRefunds.map((r) => (
-                <TableRow key={r.id} hover sx={{ '&:hover': { bgcolor: '#162238' } }}>
-                  <TableCell sx={{ color: '#f8fafc' }}>#{r.id}</TableCell>
-                  <TableCell sx={{ color: '#f8fafc' }}>{r.pnr}</TableCell>
-                  <TableCell sx={{ fontWeight: 600, color: '#4ade80' }}>
-                    ₹{Number(r.amount).toFixed(2)}
-                  </TableCell>
-                  <TableCell sx={{ color: '#94a3b8' }}>{r.reason || 'N/A'}</TableCell>
-                  <TableCell>
-                    <Chip label={r.status} color={r.status === 'FAILED' ? 'error' : r.status === 'PENDING' ? 'warning' : 'success'} size="small" />
-                  </TableCell>
+        <GlassSection title="My Processed Refunds" icon={<HistoryIcon />} padding={0}>
+          <TableContainer sx={{ overflowX: 'auto' }}>
+            <Table size="small" sx={{ minWidth: 560 }}>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Refund ID</TableCell>
+                  <TableCell>PNR</TableCell>
+                  <TableCell align="right">Refund Amount</TableCell>
+                  <TableCell>Reason</TableCell>
+                  <TableCell>Status</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+              </TableHead>
+              <TableBody>
+                {myRefunds.map((r) => (
+                  <TableRow key={r.id} hover>
+                    <TableCell><Mono>#{r.id}</Mono></TableCell>
+                    <TableCell><Mono>{r.pnr}</Mono></TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 800, color: 'success.main' }}>
+                      ₹{Number(r.amount).toFixed(2)}
+                    </TableCell>
+                    <TableCell sx={{ color: 'text.secondary' }}>{r.reason || 'N/A'}</TableCell>
+                    <TableCell>
+                      <Chip label={r.status} color={r.status === 'FAILED' ? 'error' : r.status === 'PENDING' ? 'warning' : 'success'} size="small" />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </GlassSection>
       )}
     </Box>
   );

@@ -1,9 +1,13 @@
 import { useEffect, useState } from "react";
 import {
-  Alert, Box, Button, Card, CardContent, Chip, Divider, Rating, Stack, TextField, Typography,
+  Alert, Box, Button, Chip, Divider, Rating, Stack, TextField, Typography,
 } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import RateReviewIcon from "@mui/icons-material/RateReview";
+import RouteIcon from "@mui/icons-material/Route";
 import { request } from "../team6Http";
+import { DetailGrid, DetailItem, EmptyState, GlassSection, Mono, PageHeader } from "../../components/ui";
 import "./feedback.css";
 
 // ---- Calls to the backend's feedback module (FeedbackController) ----
@@ -20,6 +24,27 @@ function submitFeedback(feedback) {
 }
 
 // ---- The page ----
+
+// A stop on the journey's route: a dot in the accent colour (green for the destination)
+// and a line down to the next stop. Only the dot and line are drawn here; the text is the children.
+function RouteStop({ destination, last, children }) {
+  return (
+    <Box sx={{ display: "flex", gap: 1.75, alignItems: "stretch" }}>
+      <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", width: 14, flexShrink: 0, pt: 0.5 }}>
+        <Box
+          sx={{
+            width: 14, height: 14, borderRadius: "50%", boxSizing: "border-box", border: "3px solid", flexShrink: 0,
+            bgcolor: (t) => (destination ? t.palette.success.main : t.app.accent),
+            borderColor: (t) => alpha(destination ? t.palette.success.main : t.app.accent, 0.3),
+            backgroundClip: "padding-box",
+          }}
+        />
+        {!last && <Box sx={{ flex: 1, width: 2, minHeight: 24, mt: 0.5, bgcolor: (t) => alpha(t.app.accent, 0.3) }} />}
+      </Box>
+      <Box sx={{ flex: 1, minWidth: 0, pb: last ? 0 : 2 }}>{children}</Box>
+    </Box>
+  );
+}
 
 // The 6 rating categories from the work plan. "key" must match the field names the backend expects.
 const CATEGORIES = [
@@ -96,123 +121,121 @@ export default function FeedbackPage({ userId, pnr: startPnr = "" }) {
 
   return (
     <>
+      <PageHeader
+        tag="Feedback"
+        title="Rate your journey"
+        subtitle="Tell us how the train, the coach and the food were. Your ratings help us improve."
+      />
       {notice && (
-        <Alert severity={notice.severity} onClose={() => setNotice(null)} sx={{ mb: 2 }}>
+        <Alert severity={notice.severity} onClose={() => setNotice(null)} sx={{ mb: 3 }}>
           {notice.text}
         </Alert>
       )}
       <Box className="two-column">
-        <Card className="panel">
-          <CardContent sx={{ p: 3 }}>
-            {!form ? (
-              // No journey chosen yet, or the backend said there's no completed journey for this PNR.
-              <Box sx={{ textAlign: "center", py: 4 }}>
-                <Typography variant="h6" fontWeight={800}>No journey selected</Typography>
-                <Typography color="text.secondary" sx={{ mt: 1 }}>
-                  Open a "Journey completed" notification, or enter your PNR.
-                </Typography>
-                {formError && <Alert severity="warning" sx={{ mt: 2, textAlign: "left" }}>{formError}</Alert>}
+        {!form ? (
+          // No journey chosen yet, or the backend said there's no completed journey for this PNR.
+          <EmptyState
+            icon={<RateReviewIcon />}
+            title="No journey selected"
+            text='Open a "Journey completed" notification, or enter your PNR.'
+            action={(
+              <Box sx={{ width: "100%" }}>
+                {formError && <Alert severity="warning" sx={{ mb: 2, textAlign: "left" }}>{formError}</Alert>}
                 <Box component="form" onSubmit={(e) => { e.preventDefault(); setPnr(pnrInput); }}
-                  sx={{ display: "flex", gap: 1, mt: 2, justifyContent: "center", flexWrap: "wrap" }}>
+                  sx={{ display: "flex", gap: 1, justifyContent: "center", flexWrap: "wrap" }}>
                   <TextField size="small" label="10-digit PNR" value={pnrInput}
                     onChange={(e) => setPnrInput(e.target.value.replace(/\D/g, "").slice(0, 10))} />
                   <Button type="submit" variant="contained" disabled={pnrInput.length !== 10}>Open form</Button>
                 </Box>
               </Box>
-            ) : form.alreadySubmitted ? (
-              <Box sx={{ textAlign: "center", py: 4 }}>
-                <CheckCircleIcon color="success" sx={{ fontSize: 60 }} />
-                <Typography variant="h6" fontWeight={800}>Feedback received!</Typography>
-                <Typography color="text.secondary">Thank you for rating PNR {form.pnr}.</Typography>
-              </Box>
-            ) : (
-              <Box component="form" onSubmit={handleSubmitFeedback}>
-                <Chip color="success" label="Journey completed" size="small" />
-                <Typography variant="h5" fontWeight={800} sx={{ mt: 2 }}>Rate your experience</Typography>
-                <Typography color="text.secondary" sx={{ mt: 1 }}>
-                  Rate from 1 (Poor) to 10 (Excellent).
-                </Typography>
-                <Divider sx={{ my: 2 }} />
-
-                {/* One star row per category. */}
-                {CATEGORIES.map((c) => (
-                  <Box key={c.key} className="rating-row">
-                    <Typography fontWeight={700}>
-                      {c.label}
-                      {c.optional && <Typography component="span" variant="caption" color="text.secondary"> (optional, skip if not applicable)</Typography>}
-                    </Typography>
-                    <Stack direction="row" alignItems="center" spacing={1}>
-                      <Rating
-                        max={10}
-                        value={ratings[c.key]}
-                        // MUI gives null when you click the same star again (= clear it).
-                        onChange={(_, value) => setRatings({ ...ratings, [c.key]: value || 0 })}
-                      />
-                      <Typography variant="body2" color="text.secondary">
-                        {ratings[c.key] ? `${ratings[c.key]}/10` : "-"}
-                      </Typography>
-                    </Stack>
-                  </Box>
-                ))}
-
-                <TextField
-                  fullWidth multiline rows={3} sx={{ mt: 2 }}
-                  label="Written message (optional)"
-                  placeholder="Tell us about your journey..."
-                  value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                  inputProps={{ maxLength: 1000 }}
-                />
-                <Button type="submit" variant="contained" fullWidth size="large" sx={{ mt: 2 }}>
-                  Submit feedback
-                </Button>
-              </Box>
             )}
-          </CardContent>
-        </Card>
+          />
+        ) : form.alreadySubmitted ? (
+          <GlassSection>
+            <Box sx={{ textAlign: "center", py: 4 }}>
+              <CheckCircleIcon color="success" sx={{ fontSize: 60 }} />
+              <Typography variant="h6" fontWeight={800}>Feedback received!</Typography>
+              <Typography color="text.secondary">Thank you for rating PNR <Mono>{form.pnr}</Mono>.</Typography>
+            </Box>
+          </GlassSection>
+        ) : (
+          <GlassSection
+            title="Rate your experience"
+            subtitle="Rate from 1 (Poor) to 10 (Excellent)."
+            icon={<RateReviewIcon />}
+            actions={<Chip color="success" label="Journey completed" size="small" />}
+          >
+            <Box component="form" onSubmit={handleSubmitFeedback} sx={{ mt: 2.5 }}>
+              {/* One star row per category. */}
+              {CATEGORIES.map((c) => (
+                <Box
+                  key={c.key}
+                  sx={{
+                    px: 2, py: 1.5, mb: 1.25, borderRadius: "12px",
+                    bgcolor: (t) => t.app.glassNested, border: (t) => `1px solid ${t.app.divider}`,
+                  }}
+                >
+                  <Typography fontWeight={700}>
+                    {c.label}
+                    {c.optional && <Typography component="span" variant="caption" color="text.secondary"> (optional, skip if not applicable)</Typography>}
+                  </Typography>
+                  <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
+                    <Rating
+                      max={10}
+                      value={ratings[c.key]}
+                      // MUI gives null when you click the same star again (= clear it).
+                      onChange={(_, value) => setRatings({ ...ratings, [c.key]: value || 0 })}
+                      sx={{ maxWidth: "100%", "& .MuiRating-iconFilled": { color: (t) => t.palette.warning.main } }}
+                    />
+                    <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 700 }}>
+                      {ratings[c.key] ? `${ratings[c.key]}/10` : "-"}
+                    </Typography>
+                  </Stack>
+                </Box>
+              ))}
+
+              <TextField
+                fullWidth multiline rows={3} sx={{ mt: 1.5 }}
+                label="Written message (optional)"
+                placeholder="Tell us about your journey..."
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                inputProps={{ maxLength: 1000 }}
+              />
+              <Button type="submit" variant="contained" fullWidth size="large" sx={{ mt: 2 }}>
+                Submit feedback
+              </Button>
+            </Box>
+          </GlassSection>
+        )}
 
         {/* Journey details: comes from the JOURNEY_COMPLETED notification's data. */}
-        <Card className="panel">
-          <CardContent sx={{ p: 3 }}>
-            <Typography variant="h6" fontWeight={800}>Journey details</Typography>
-            {!journey ? (
-              <Typography color="text.secondary" variant="body2" sx={{ mt: 1 }}>Nothing to show yet.</Typography>
-            ) : (
-              <>
-                <Typography color="text.secondary" variant="body2">
-                  {journey.trainName} · #{journey.trainNumber}
-                </Typography>
-                <Box className="journey-route">
-                  <Box className="station-dot" />
-                  <Box sx={{ flex: 1 }}>
-                    <Typography fontWeight={700}>{journey.fromStation}</Typography>
-                    <Typography variant="body2" color="text.secondary">Departure · {journey.departureTime}</Typography>
-                  </Box>
-                </Box>
-                <Box className="route-line" />
-                <Box className="journey-route">
-                  <Box className="station-dot destination" />
-                  <Box sx={{ flex: 1 }}>
-                    <Typography fontWeight={700}>{journey.toStation}</Typography>
-                    <Typography variant="body2" color="text.secondary">Arrival · {journey.arrivalTime}</Typography>
-                  </Box>
-                </Box>
-                <Divider sx={{ my: 2 }} />
-                {[
-                  ["PNR", form.pnr],
-                  ["Journey date", journey.journeyDate],
-                  ["Passenger", journey.passengerName],
-                  ["Coach / Seat", `${journey.coach} / ${journey.seat}`],
-                ].map(([label, value]) => (
-                  <Stack key={label} direction="row" justifyContent="space-between" sx={{ mt: 1 }}>
-                    <Typography color="text.secondary">{label}</Typography>
-                    <Typography fontWeight={700}>{value}</Typography>
-                  </Stack>
-                ))}
-              </>
-            )}
-          </CardContent>
-        </Card>
+        <GlassSection title="Journey details" icon={<RouteIcon />}>
+          {!journey ? (
+            <Typography color="text.secondary" variant="body2" sx={{ mt: 1 }}>Nothing to show yet.</Typography>
+          ) : (
+            <>
+              <Typography color="text.secondary" variant="body2" sx={{ mt: 1, mb: 2 }}>
+                {journey.trainName} · #<Mono>{journey.trainNumber}</Mono>
+              </Typography>
+              <RouteStop>
+                <Typography fontWeight={700}>{journey.fromStation}</Typography>
+                <Typography variant="body2" color="text.secondary">Departure · {journey.departureTime}</Typography>
+              </RouteStop>
+              <RouteStop destination last>
+                <Typography fontWeight={700}>{journey.toStation}</Typography>
+                <Typography variant="body2" color="text.secondary">Arrival · {journey.arrivalTime}</Typography>
+              </RouteStop>
+              <Divider sx={{ my: 2 }} />
+              <DetailGrid columns={2}>
+                <DetailItem label="PNR" mono>{form.pnr}</DetailItem>
+                <DetailItem label="Journey date">{journey.journeyDate}</DetailItem>
+                <DetailItem label="Passenger">{journey.passengerName}</DetailItem>
+                <DetailItem label="Coach / Seat">{`${journey.coach} / ${journey.seat}`}</DetailItem>
+              </DetailGrid>
+            </>
+          )}
+        </GlassSection>
       </Box>
     </>
   );

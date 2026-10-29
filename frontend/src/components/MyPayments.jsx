@@ -1,14 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import {
-  Box, Card, Typography, Table, TableBody,
-  TableCell, TableContainer, TableHead, TableRow, Paper,
-  Chip, CircularProgress, Alert, Button, Link
+  Box, Typography, Table, TableBody,
+  TableCell, TableContainer, TableHead, TableRow,
+  Chip, Alert, Button, Link
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import ReceiptIcon from '@mui/icons-material/ReceiptLong';
 import { api } from '../api';
+import { PageHeader, GlassSection, EmptyState, LoadingCard, Mono } from './ui';
 
+/**
+ * The customer's payment transactions: one row per payment with its gateway
+ * ids, booking PNR, amount and status. The table scrolls sideways on narrow
+ * screens.
+ */
 export default function MyPayments({ user }) {
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -33,88 +39,90 @@ export default function MyPayments({ user }) {
 
   const getStatusChip = (status) => {
     if (status === 'PAID') {
-      return <Chip label="PAID" color="success" size="small" sx={{ fontWeight: 600 }} />;
+      return <Chip label="PAID" color="success" size="small" />;
     } else if (status === 'CREATED') {
-      return <Chip label="PENDING" color="warning" size="small" sx={{ fontWeight: 600 }} />;
+      return <Chip label="PENDING" color="warning" size="small" />;
     } else if (status === 'PARTIALLY_REFUNDED') {
-      return <Chip label="PARTLY REFUNDED" color="info" size="small" sx={{ fontWeight: 600 }} />;
+      return <Chip label="PARTLY REFUNDED" color="info" size="small" />;
     } else {
-      return <Chip label={status || 'UNKNOWN'} color="default" size="small" sx={{ fontWeight: 600 }} />;
+      return <Chip label={status || 'UNKNOWN'} color="default" size="small" />;
     }
   };
 
   return (
-    <Box sx={{ maxWidth: 1000, mx: 'auto', mt: 1, mb: 5 }}>
-      <Paper elevation={0} sx={{ p: 3, mb: 3, bgcolor: '#111a2e', borderRadius: 3, border: '1px solid #1e293b', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <ReceiptIcon sx={{ fontSize: 32, color: 'primary.light', mr: 1.5 }} />
-          <Box>
-            <Typography variant="h5" sx={{ fontWeight: 700, color: '#f8fafc' }}>
-              My Payment Transactions
-            </Typography>
-            <Typography variant="body2" sx={{ color: '#94a3b8' }}>
-              Payments made by {user.email}
-            </Typography>
-          </Box>
-        </Box>
-        <Button startIcon={<RefreshIcon />} onClick={fetchPayments} variant="outlined" size="small" sx={{ borderColor: '#22324e', color: '#f8fafc' }}>
-          Refresh
-        </Button>
-      </Paper>
+    <Box>
+      <PageHeader
+        tag="Payments"
+        title="My payments"
+        subtitle={`Payments made by ${user.email}`}
+      />
 
       {error && (
-        <Alert severity="error" sx={{ mb: 3, bgcolor: 'rgba(239, 68, 68, 0.1)', color: '#fca5a5' }}>
+        <Alert severity="error" sx={{ mb: 3 }}>
           {error}
         </Alert>
       )}
 
       {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}>
-          <CircularProgress />
-        </Box>
+        <LoadingCard text="Loading payments…" />
       ) : payments.length === 0 ? (
-        <Card variant="outlined" sx={{ p: 4, textAlign: 'center', bgcolor: '#111a2e', borderColor: '#1e293b' }}>
-          <Typography sx={{ color: '#94a3b8' }}>No payment transactions recorded for this account yet.</Typography>
-        </Card>
+        <EmptyState
+          icon={<ReceiptIcon />}
+          title="No payments yet"
+          text="No payment transactions recorded for this account yet."
+        />
       ) : (
-        <TableContainer component={Paper} variant="outlined" sx={{ bgcolor: '#111a2e', borderColor: '#1e293b' }}>
-          <Table>
-            <TableHead sx={{ bgcolor: '#0b111e' }}>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>Payment ID</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>PNR</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>Gateway Order</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>Amount</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: '#94a3b8' }}>Status</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {payments.map((p) => (
-                <TableRow key={p.id} hover sx={{ '&:hover': { bgcolor: '#162238' } }}>
-                  <TableCell>
-                    <Typography variant="body2" fontWeight={600} sx={{ color: '#38bdf8' }}>
-                      {p.razorpayPaymentId || `PAY-${p.id}`}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Link component={RouterLink} to={`/pnr/${p.pnr}`} underline="hover" sx={{ color: '#f8fafc' }}>{p.pnr}</Link>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="caption" sx={{ color: '#64748b' }}>
-                      {p.razorpayOrderId}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" fontWeight={600} sx={{ color: '#4ade80' }}>
-                      ₹{Number(p.amount).toFixed(2)}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>{getStatusChip(p.status)}</TableCell>
+        <GlassSection
+          title="Payment transactions"
+          icon={<ReceiptIcon />}
+          padding={0}
+          actions={
+            <Button startIcon={<RefreshIcon />} onClick={fetchPayments} variant="outlined" size="small">
+              Refresh
+            </Button>
+          }
+        >
+          <TableContainer sx={{ overflowX: 'auto' }}>
+            <Table sx={{ minWidth: 640 }}>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Payment ID</TableCell>
+                  <TableCell>PNR</TableCell>
+                  <TableCell>Gateway Order</TableCell>
+                  <TableCell align="right">Amount</TableCell>
+                  <TableCell>Status</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+              </TableHead>
+              <TableBody>
+                {payments.map((p) => (
+                  <TableRow key={p.id} hover>
+                    <TableCell>
+                      <Typography variant="body2" component="div">
+                        <Mono sx={{ color: (t) => t.app.accent }}>{p.razorpayPaymentId || `PAY-${p.id}`}</Mono>
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Link component={RouterLink} to={`/pnr/${p.pnr}`} underline="hover">
+                        <Mono>{p.pnr}</Mono>
+                      </Link>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="caption" component="div" color="text.secondary">
+                        <Mono sx={{ fontWeight: 500 }}>{p.razorpayOrderId}</Mono>
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Typography variant="body2" sx={{ fontWeight: 800, color: 'success.main' }}>
+                        ₹{Number(p.amount).toFixed(2)}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>{getStatusChip(p.status)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </GlassSection>
       )}
     </Box>
   );

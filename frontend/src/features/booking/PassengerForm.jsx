@@ -1,13 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Box, Card, CardContent, Typography, TextField, Button, Grid, Alert,
+  Box, Card, CardContent, Typography, TextField, Button, Alert,
   CircularProgress, Chip, IconButton, MenuItem, Divider, Tooltip
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/PersonAdd';
 import DeleteIcon from '@mui/icons-material/DeleteOutline';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import TrainIcon from '@mui/icons-material/Train';
+import GroupIcon from '@mui/icons-material/GroupsOutlined';
+import PersonIcon from '@mui/icons-material/PersonOutline';
+import PaymentIcon from '@mui/icons-material/PaymentOutlined';
 import { bookingApi } from '../../api';
 import { navigate } from '../../router';
+import { DetailGrid, DetailItem, GlassSection, IconTile, LoadingCard, Mono, PageHeader } from '../../components/ui';
 import { GENDERS, availabilityLabel, formatDate, rupees } from './format';
 import { ageProblem, concessionLabel, useConcessionRules } from './concessions';
 
@@ -76,78 +81,108 @@ export default function PassengerForm({ params }) {
   if (loadError) {
     return (
       <Box sx={{ maxWidth: 960, mx: 'auto' }}>
+        <PageHeader tag="Reservations" title="Passenger details" />
         <Alert severity="error" action={<Button color="inherit" onClick={() => window.history.back()}>Back</Button>}>
           {loadError}
         </Alert>
       </Box>
     );
   }
-  if (!journey) return <Box sx={{ textAlign: 'center', p: 4 }}><CircularProgress /></Box>;
+  if (!journey) return <LoadingCard text="Loading the journey…" />;
 
   const cls = journey.classes[0];
   const label = availabilityLabel(cls);
 
   return (
     <Box sx={{ maxWidth: 960, mx: 'auto' }}>
-      <Button
-        startIcon={<ArrowBackIcon />}
-        onClick={() => navigate(`/search/${journey.from.code}/${journey.to.code}/${journey.from.date}`)}
-        sx={{ mb: 2 }}
-      >
-        Back to results
-      </Button>
+      <PageHeader
+        tag="Reservations"
+        title="Passenger details"
+        subtitle="Add who is travelling. We hold the seats for 15 minutes while you review and pay."
+      />
 
-      <Card sx={{ mb: 3 }}>
-        <CardContent sx={{ p: 3 }}>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: 1 }}>
-            <Typography variant="h6" component="h1">{journey.trainName}</Typography>
-            <Typography color="text.secondary">#{journey.trainNo}</Typography>
-          </Box>
-          <Typography sx={{ mt: 0.5 }}>
-            {journey.from.name} ({journey.from.code}), {formatDate(journey.from.date)}
-            {' → '}
-            {journey.to.name} ({journey.to.code}), {formatDate(journey.to.date)}
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mt: 1.5, flexWrap: 'wrap' }}>
-            <Chip label={`${cls.classCode} · ${cls.className}`} variant="outlined" />
-            <Chip label={label.text} color={label.color} sx={{ fontWeight: 600 }} />
-            <Typography variant="body2" color="text.secondary">{rupees(cls.fare)} per passenger, general quota</Typography>
-          </Box>
-        </CardContent>
-      </Card>
+      <GlassSection
+        title={journey.trainName}
+        subtitle={<>Train <Mono>#{journey.trainNo}</Mono></>}
+        icon={<TrainIcon />}
+        actions={
+          <Button
+            size="small"
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate(`/search/${journey.from.code}/${journey.to.code}/${journey.from.date}`)}
+          >
+            Back to results
+          </Button>
+        }
+        contentSx={{ pt: 2.5 }}
+      >
+        <DetailGrid columns={{ xs: 1, sm: 2 }}>
+          <DetailItem label="From">
+            {journey.from.name} ({journey.from.code})
+            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>{formatDate(journey.from.date)}</Typography>
+          </DetailItem>
+          <DetailItem label="To">
+            {journey.to.name} ({journey.to.code})
+            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>{formatDate(journey.to.date)}</Typography>
+          </DetailItem>
+        </DetailGrid>
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mt: 2, flexWrap: 'wrap' }}>
+          <Chip label={`${cls.classCode} · ${cls.className}`} variant="outlined" />
+          <Chip label={label.text} color={label.color} />
+          <Typography variant="body2" color="text.secondary">{rupees(cls.fare)} per passenger, general quota</Typography>
+        </Box>
+      </GlassSection>
 
       <form onSubmit={submit}>
-        <Card sx={{ mb: 3 }}>
-          <CardContent sx={{ p: 3 }}>
-            <Typography variant="h6" component="h2" gutterBottom>
-              Passengers ({passengers.length} of up to {MAX_PASSENGERS})
-            </Typography>
-            {passengers.map((p, i) => (
-              <Grid container spacing={2} key={i} sx={{ mb: 1 }} alignItems="center">
-                <Grid item xs={12} sm={6} md={4}>
+        <GlassSection
+          title={`Passengers (${passengers.length} of up to ${MAX_PASSENGERS})`}
+          icon={<GroupIcon />}
+          contentSx={{ pt: 2.5 }}
+        >
+          {passengers.map((p, i) => (
+            <Card key={i} sx={{ mb: 2 }}>
+              <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                  <IconTile size={32}><PersonIcon /></IconTile>
+                  <Typography variant="subtitle2" sx={{ flexGrow: 1, fontSize: '0.95rem' }}>Passenger {i + 1}</Typography>
+                  <Tooltip title="Remove passenger">
+                    <span>
+                      <IconButton
+                        aria-label={`Remove passenger ${i + 1}`}
+                        disabled={passengers.length === 1}
+                        onClick={() => setPassengers((list) => list.filter((_, j) => j !== i))}
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                </Box>
+                <Box
+                  sx={{
+                    display: 'grid', gap: 2,
+                    gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', md: 'minmax(0, 2fr) minmax(0, 0.8fr) minmax(0, 1fr) minmax(0, 1.6fr)' },
+                    '& > .passenger-name, & > .passenger-concession': { gridColumn: { xs: '1 / -1', md: 'auto' } },
+                  }}
+                >
                   <TextField
+                    className="passenger-name"
                     fullWidth required size="small" label={`Passenger ${i + 1} name`}
                     value={p.name} onChange={(e) => update(i, 'name', e.target.value)}
                     inputProps={{ maxLength: 100 }}
                   />
-                </Grid>
-                <Grid item xs={4} sm={2} md={1.5}>
                   <TextField
                     fullWidth required size="small" label="Age" type="number"
                     value={p.age} onChange={(e) => update(i, 'age', e.target.value)}
                     inputProps={{ min: 1, max: 120 }}
                   />
-                </Grid>
-                <Grid item xs={8} sm={4} md={2}>
                   <TextField
                     select fullWidth required size="small" label="Gender"
                     value={p.gender} onChange={(e) => update(i, 'gender', e.target.value)}
                   >
                     {GENDERS.map((g) => <MenuItem key={g.value} value={g.value}>{g.label}</MenuItem>)}
                   </TextField>
-                </Grid>
-                <Grid item xs={10} sm={11} md={3.5}>
                   <TextField
+                    className="passenger-concession"
                     select fullWidth size="small" label="Concession"
                     value={p.concessionId} onChange={(e) => update(i, 'concessionId', e.target.value)}
                     disabled={!concessions.length}
@@ -162,54 +197,40 @@ export default function PassengerForm({ params }) {
                       );
                     })}
                   </TextField>
-                </Grid>
-                <Grid item xs={2} sm={1}>
-                  <Tooltip title="Remove passenger">
-                    <span>
-                      <IconButton
-                        aria-label={`Remove passenger ${i + 1}`}
-                        disabled={passengers.length === 1}
-                        onClick={() => setPassengers((list) => list.filter((_, j) => j !== i))}
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </span>
-                  </Tooltip>
-                </Grid>
-              </Grid>
-            ))}
-            <Button
-              startIcon={<AddIcon />}
-              disabled={passengers.length >= MAX_PASSENGERS}
-              onClick={() => setPassengers((list) => [...list, emptyPassenger()])}
-            >
-              Add passenger
-            </Button>
-          </CardContent>
-        </Card>
+                </Box>
+              </CardContent>
+            </Card>
+          ))}
+          <Button
+            variant="outlined"
+            startIcon={<AddIcon />}
+            disabled={passengers.length >= MAX_PASSENGERS}
+            onClick={() => setPassengers((list) => [...list, emptyPassenger()])}
+          >
+            Add passenger
+          </Button>
+        </GlassSection>
 
         {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
 
-        <Card>
-          <CardContent sx={{ p: 3 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-              <Typography color="text.secondary">{passengers.length} × {rupees(cls.fare)}</Typography>
-              <Typography variant="h6">{rupees(Number(cls.fare) * passengers.length)}</Typography>
-            </Box>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              The seats are held for 15 minutes while you pay. Passengers who don't get a berth go on RAC or the
-              waitlist, as shown above.
-              {passengers.some((p) => p.concessionId !== '') && (
-                <> Concessions are taken off the fare when the seats are held; send the documents for them from
-                  the Concessions tab, where staff check them.</>
-              )}
-            </Typography>
-            <Divider sx={{ mb: 2 }} />
-            <Button type="submit" variant="contained" size="large" fullWidth disabled={submitting}>
-              {submitting ? <CircularProgress size={22} color="inherit" /> : 'Hold seats and review'}
-            </Button>
-          </CardContent>
-        </Card>
+        <GlassSection title="Fare" icon={<PaymentIcon />} contentSx={{ pt: 2.5 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', mb: 1.5 }}>
+            <Typography color="text.secondary">{passengers.length} × {rupees(cls.fare)}</Typography>
+            <Typography variant="h5" component="p">{rupees(Number(cls.fare) * passengers.length)}</Typography>
+          </Box>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            The seats are held for 15 minutes while you pay. Passengers who don't get a berth go on RAC or the
+            waitlist, as shown above.
+            {passengers.some((p) => p.concessionId !== '') && (
+              <> Concessions are taken off the fare when the seats are held; send the documents for them from
+                the Concessions tab, where staff check them.</>
+            )}
+          </Typography>
+          <Divider sx={{ mb: 2.5 }} />
+          <Button type="submit" variant="contained" size="large" fullWidth disabled={submitting}>
+            {submitting ? <CircularProgress size={22} color="inherit" /> : 'Hold seats and review'}
+          </Button>
+        </GlassSection>
       </form>
     </Box>
   );

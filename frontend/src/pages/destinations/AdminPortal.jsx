@@ -1,6 +1,11 @@
 import { useState } from 'react';
+import { Alert, Box, Button, Chip, TextField, Typography } from '@mui/material';
+import LockOpenOutlinedIcon from '@mui/icons-material/LockOpenOutlined';
+import LogoutIcon from '@mui/icons-material/Logout';
+import PersonSearchOutlinedIcon from '@mui/icons-material/PersonSearchOutlined';
+import ConstructionOutlinedIcon from '@mui/icons-material/ConstructionOutlined';
 import ChangePasswordCard from '../../components/ChangePasswordCard';
-import AlertMessage from '../../components/AlertMessage';
+import { DetailGrid, DetailItem, GlassSection, PageHeader } from '../../components/ui';
 import { useAuth } from '../../context/useAuth';
 import { adminService } from '../../services/adminService';
 
@@ -39,37 +44,47 @@ function UserLookupCard() {
   };
 
   return (
-    <section className="admin-card" aria-labelledby="admin-lookup-title">
-      <h3 id="admin-lookup-title" className="admin-card-title">User Lookup</h3>
-      <p className="admin-card-desc">View an account&apos;s role and status by user ID.</p>
-      {alert && <AlertMessage type={alert.type} message={alert.text} onDismiss={() => setAlert(null)} />}
-      <form onSubmit={submit} noValidate className="admin-inline-form">
-        <div className="form-group">
-          <label htmlFor="lookup-user-id" className="form-label">User ID</label>
-          <input
-            id="lookup-user-id"
-            className="form-input"
-            inputMode="numeric"
-            value={userId}
-            onChange={(e) => setUserId(e.target.value)}
-            disabled={busy}
-            aria-invalid={Boolean(error)}
-          />
-          {error && <div className="field-error" role="alert">{error}</div>}
-        </div>
-        <button type="submit" className="btn-submit" disabled={busy} id="lookup-submit">
-          {busy ? 'Searching...' : 'Look Up'}
-        </button>
-      </form>
-      {result && (
-        <div className="portal-meta-grid admin-result" id="lookup-result">
-          <div className="meta-item"><span className="meta-label">Name</span><span className="meta-val">{result.name}</span></div>
-          <div className="meta-item"><span className="meta-label">Email</span><span className="meta-val">{result.email}</span></div>
-          <div className="meta-item"><span className="meta-label">Role</span><span className="detail-badge role-badge">{result.role}</span></div>
-          <div className="meta-item"><span className="meta-label">Status</span><span className="detail-badge status-badge">{result.status}</span></div>
-        </div>
+    <GlassSection
+      title="User Lookup"
+      subtitle="View an account's role and status by user ID."
+      icon={<PersonSearchOutlinedIcon />}
+      sx={{ mb: 0, height: '100%' }}
+    >
+      {alert && (
+        <Alert severity={alert.type} onClose={() => setAlert(null)} sx={{ mb: 2 }}>{alert.text}</Alert>
       )}
-    </section>
+      <Box component="form" onSubmit={submit} noValidate sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <TextField
+          id="lookup-user-id"
+          label="User ID"
+          value={userId}
+          onChange={(e) => setUserId(e.target.value)}
+          disabled={busy}
+          error={Boolean(error)}
+          helperText={error || undefined}
+          fullWidth
+          slotProps={{
+            htmlInput: { inputMode: 'numeric', 'aria-invalid': Boolean(error) },
+            formHelperText: { role: error ? 'alert' : undefined },
+          }}
+        />
+        <Box>
+          <Button type="submit" variant="contained" disabled={busy} id="lookup-submit">
+            {busy ? 'Searching...' : 'Look Up'}
+          </Button>
+        </Box>
+      </Box>
+      {result && (
+        <Box id="lookup-result" sx={{ mt: 2.5 }}>
+          <DetailGrid columns={{ xs: 1, sm: 2 }}>
+            <DetailItem label="Name">{result.name}</DetailItem>
+            <DetailItem label="Email">{result.email}</DetailItem>
+            <DetailItem label="Role"><Chip size="small" label={result.role} /></DetailItem>
+            <DetailItem label="Status"><Chip size="small" color="success" label={result.status} /></DetailItem>
+          </DetailGrid>
+        </Box>
+      )}
+    </GlassSection>
   );
 }
 
@@ -102,97 +117,109 @@ function UnlockAccountCard() {
   };
 
   return (
-    <section className="admin-card" aria-labelledby="admin-unlock-title">
-      <h3 id="admin-unlock-title" className="admin-card-title">Unlock Account</h3>
-      <p className="admin-card-desc">Restore a locked account (locked after too many failed logins).</p>
-      {alert && <AlertMessage type={alert.type} message={alert.text} onDismiss={() => setAlert(null)} />}
-      <form onSubmit={submit} noValidate className="admin-inline-form">
-        <div className="form-group">
-          <label htmlFor="unlock-user-id" className="form-label">User ID</label>
-          <input
-            id="unlock-user-id"
-            className="form-input"
-            inputMode="numeric"
-            value={userId}
-            onChange={(e) => setUserId(e.target.value)}
-            disabled={busy}
-            aria-invalid={Boolean(error)}
-          />
-          {error && <div className="field-error" role="alert">{error}</div>}
-        </div>
-        <button type="submit" className="btn-submit" disabled={busy} id="unlock-submit">
-          {busy ? 'Unlocking...' : 'Unlock Account'}
-        </button>
-      </form>
-    </section>
+    <GlassSection
+      title="Unlock Account"
+      subtitle="Restore a locked account (locked after too many failed logins)."
+      icon={<LockOpenOutlinedIcon />}
+      sx={{ mb: 0, height: '100%' }}
+    >
+      {alert && (
+        <Alert severity={alert.type} onClose={() => setAlert(null)} sx={{ mb: 2 }}>{alert.text}</Alert>
+      )}
+      <Box component="form" onSubmit={submit} noValidate sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <TextField
+          id="unlock-user-id"
+          label="User ID"
+          value={userId}
+          onChange={(e) => setUserId(e.target.value)}
+          disabled={busy}
+          error={Boolean(error)}
+          helperText={error || undefined}
+          fullWidth
+          slotProps={{
+            htmlInput: { inputMode: 'numeric', 'aria-invalid': Boolean(error) },
+            formHelperText: { role: error ? 'alert' : undefined },
+          }}
+        />
+        <Box>
+          <Button type="submit" variant="contained" disabled={busy} id="unlock-submit">
+            {busy ? 'Unlocking...' : 'Unlock Account'}
+          </Button>
+        </Box>
+      </Box>
+    </GlassSection>
   );
 }
 
+/** Admin page: profile, the user lookup / unlock tools, password change, sign out. */
 export default function AdminPortal() {
   const { user, logoutUser } = useAuth();
 
   return (
-    <section className="embedded-portal">
-      <header className="embedded-portal-header">
-        <h1 className="section-title">Admin Dashboard</h1>
-        <p className="section-subtitle">Identity & access administration</p>
-      </header>
-      <div className="destination-portal-content">
-        <div className="portal-welcome-card admin-accent">
-          <div className="portal-user-hero">
-            <div className="portal-avatar admin-avatar" aria-hidden="true">
-              {user?.name ? user.name[0].toUpperCase() : 'A'}
-            </div>
-            <div>
-              <h2 className="portal-username">{user?.name || 'System Administrator'}</h2>
-              <span className="portal-email">{user?.email}</span>
-            </div>
-          </div>
+    <Box component="section">
+      <PageHeader
+        tag="Administration"
+        title="Admin dashboard"
+        subtitle="Identity & access administration"
+      />
 
-          <div className="portal-meta-grid">
-            <div className="meta-item">
-              <span className="meta-label">Role</span>
-              <span className="detail-badge role-badge admin-badge">{user?.role}</span>
-            </div>
-            <div className="meta-item">
-              <span className="meta-label">Status</span>
-              <span className="detail-badge status-badge">{user?.status || 'ACTIVE'}</span>
-            </div>
-            <div className="meta-item">
-              <span className="meta-label">Admin ID</span>
-              <span className="meta-val">#{user?.userId}</span>
-            </div>
-          </div>
-        </div>
+      <GlassSection>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2.5, mb: 3, minWidth: 0 }}>
+          <Box
+            aria-hidden="true"
+            sx={{
+              width: 72, height: 72, flexShrink: 0, borderRadius: '50%',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '1.9rem', fontWeight: 800,
+              color: (t) => t.palette.warning.contrastText,
+              bgcolor: 'warning.main',
+            }}
+          >
+            {user?.name ? user.name[0].toUpperCase() : 'A'}
+          </Box>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="h5" component="h2" sx={{ wordBreak: 'break-word' }}>
+              {user?.name || 'System Administrator'}
+            </Typography>
+            <Typography color="text.secondary" sx={{ wordBreak: 'break-word' }}>{user?.email}</Typography>
+          </Box>
+        </Box>
 
-        <div className="admin-grid">
-          <UserLookupCard />
-          <UnlockAccountCard />
-        </div>
+        <DetailGrid columns={{ xs: 2, sm: 3 }}>
+          <DetailItem label="Role"><Chip size="small" color="warning" label={user?.role} /></DetailItem>
+          <DetailItem label="Status"><Chip size="small" color="success" label={user?.status || 'ACTIVE'} /></DetailItem>
+          <DetailItem label="Admin ID" mono>#{user?.userId}</DetailItem>
+        </DetailGrid>
+      </GlassSection>
 
-        <ChangePasswordCard />
+      <Box
+        sx={{
+          display: 'grid', gap: 3, mb: 3,
+          gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(2, minmax(0, 1fr))' },
+        }}
+      >
+        <UserLookupCard />
+        <UnlockAccountCard />
+      </Box>
 
-        <div className="team-boundary-callout">
-          <div className="boundary-header">
-            <strong>Not yet available (no backend endpoint)</strong>
-          </div>
-          <div className="integration-notes">
-            <span>• Listing / searching all users</span>
-            <span>• Suspending, deactivating or reactivating accounts</span>
-            <span>• Creating staff accounts or changing roles</span>
-            <span>• Viewing the audit log (VIEW_AUDIT_LOG)</span>
-          </div>
-          <p className="boundary-subnote">
-            <em>These need new secured backend routes; none were invented on the frontend.</em>
-          </p>
-        </div>
+      <ChangePasswordCard />
 
-        <div className="portal-actions">
-          <button type="button" className="btn-submit btn-secondary-danger" onClick={logoutUser} id="admin-signout">
-            Sign Out
-          </button>
-        </div>
-      </div>
-    </section>
+      <GlassSection
+        title="Coming soon"
+        subtitle="These admin tools are planned but not available yet."
+        icon={<ConstructionOutlinedIcon />}
+      >
+        <Box component="ul" sx={{ m: 0, pl: 2.5, display: 'flex', flexDirection: 'column', gap: 0.75, color: 'text.secondary' }}>
+          <li>Listing / searching all users</li>
+          <li>Suspending, deactivating or reactivating accounts</li>
+          <li>Creating staff accounts or changing roles</li>
+          <li>Viewing the audit log (VIEW_AUDIT_LOG)</li>
+        </Box>
+      </GlassSection>
+
+      <Button variant="contained" color="error" startIcon={<LogoutIcon />} onClick={logoutUser} id="admin-signout">
+        Sign Out
+      </Button>
+    </Box>
   );
 }
