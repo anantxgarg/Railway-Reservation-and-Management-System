@@ -269,6 +269,8 @@ Files `04_functions.sql` and `06_procedures.sql`; how to call them is in the [RE
 
 These are Team 4's tables, created by Flyway (`src/main/resources/db/migration`, `V2__link_to_c3_booking.sql`), not by the files here. They are listed because they point at C3 rows.
 
+> **Standalone demo branch:** Team 4's payments app (and its Flyway files) is removed from this branch, so these tables don't exist here. The booking service's demo mode (`BOOKING_DEMO=true`) confirms bookings with `confirm_booking` and cancels paid ones with `cancel_passengers` directly, without payment or refund rows.
+
 | Table | Column | References | Note |
 |---|---|---|---|
 | `payments` | `pnr` | `booking(pnr)` | One Razorpay order and payment per row. Status `CREATED`, `PAID`, `PARTIALLY_REFUNDED`, `REFUNDED` |

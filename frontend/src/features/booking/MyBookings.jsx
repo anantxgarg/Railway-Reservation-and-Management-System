@@ -9,7 +9,7 @@ import { BOOKING_STATUS_COLOR, formatDate, rupees } from './format';
 
 /**
  * #/bookings: the customer's bookings, newest first. Paying, PNR status and
- * cancelling (or cancel with refund, once paid) happen on the booking's page.
+ * cancelling (also once paid, in the demo) happen on the booking's page.
  */
 export default function MyBookings() {
   const [bookings, setBookings] = useState(null);

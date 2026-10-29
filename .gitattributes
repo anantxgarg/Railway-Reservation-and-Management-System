@@ -1,0 +1,4 @@
+# Shell scripts must keep LF line endings, or bash on Linux/macOS/WSL fails on them.
+*.sh      text eol=lf
+mvnw      text eol=lf
+*.cmd     text eol=crlf

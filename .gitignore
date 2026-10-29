@@ -38,3 +38,12 @@ credentials.properties
 Thumbs.db
 .DS_Store
 reset_postgres_password.bat
+
+### Demo runtime (start-demo.sh) ###
+logs/
+*.log
+pgdata/
+
+### Node / frontend ###
+node_modules/
+frontend/dist/

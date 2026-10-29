@@ -2,6 +2,8 @@
 
 PostgreSQL tables, seed data and tests for the booking module. Table and column names follow `schema_relational.dbml` (section C4 Booking).
 
+> **Standalone demo branch:** Team 1's Node backend and Team 4's payments app are removed from this branch. The booking service's demo mode (`BOOKING_DEMO=true`, see [`booking-service/README.md`](../../booking-service/README.md#demo-mode-standalone-without-team-1--team-4)) stands in for them: it logs users in against C1's `users` table, calls `confirm_booking` for "payment", and calls `cancel_passengers` for paid bookings. Mentions of Team 4's code below (e.g. `ReservationRepository`) describe the integrated system.
+
 ## Files
 
 | File | What it does | Owner |

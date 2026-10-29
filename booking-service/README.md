@@ -7,6 +7,8 @@ The booking rules (seat allocation, RAC and waitlist, holds, cancellations, no d
 - calls the C3 functions and views through `JdbcTemplate` (no Hibernate, no Flyway);
 - turns database errors into HTTP errors.
 
+> **Standalone demo branch:** Team 1's login backend and Team 4's payments app are removed from this branch. Run the service in [demo mode](#demo-mode-standalone-without-team-1--team-4) (`BOOKING_DEMO=true`), which stands in for them. The sections below that send you to Team 1's login or Team 4's payments and refunds describe the integrated system.
+
 ## Run
 
 1. Build the shared database (see the root README): `PGHOST=localhost PGUSER=postgres ./database/setup.sh`
@@ -109,6 +111,32 @@ A paid booking (`CONFIRMED`) returns `409 PAID_BOOKING`. Cancel it through Team 
 
 Paying works the same way: Team 4's `POST /api/payments/order {"pnr": ...}` and the Razorpay checkout. A successful payment confirms the booking.
 
+## Demo mode (standalone, without Team 1 / Team 4)
+
+For demonstrating Team 3 on its own, with only PostgreSQL and this service running. Turn it on with `BOOKING_DEMO=true` (property `booking.demo.enabled`, default `false`):
+
+```bash
+cd booking-service
+BOOKING_DEMO=true JWT_SECRET=any-string-of-at-least-32-bytes-0123456789 \
+PGHOST=localhost PGUSER=postgres PGPASSWORD=... ./mvnw spring-boot:run
+```
+
+`JWT_SECRET` can be any value of at least 32 bytes, because this service both issues and checks the tokens. The code is in `com.railway.booking.demo` and doesn't exist at all when demo mode is off, so the integrated behaviour is unchanged. Never turn it on next to the real Team 1 and Team 4 services.
+
+What it adds:
+
+- **Login, a stand-in for Team 1.** Same paths, JSON and error bodies as Team 1's backend, so the frontend works unchanged (point the Vite `/api/auth` proxy at port 8082). Passwords are checked against the bcrypt hashes in C1's `users` table, and only `ACTIVE` accounts may log in. Access tokens are Team 1's: HS256, 15 minutes, `sub` = user id, `role` claim. Refresh tokens are kept in memory, rotate on every use, and are revoked on logout; a restart logs everyone out. Failed logins are not counted and nothing locks.
+
+  | Method | Path | Body | Response |
+  |---|---|---|---|
+  | POST | `/api/auth/login` | `{"email", "password"}` | `200 {"message": "Login successful", "token", "refreshToken", "user": {"userId", "name", "email", "role"}}`; `401 INVALID_CREDENTIALS`; `403 ACCOUNT_NOT_ACTIVE` (locked, suspended, ...); `400 VALIDATION_ERROR` with `fields` |
+  | POST | `/api/auth/refresh` | `{"refreshToken"}` | `200 {"token", "refreshToken"}`; `401 INVALID_REFRESH_TOKEN` / `EXPIRED_REFRESH_TOKEN` |
+  | POST | `/api/auth/logout` | Bearer token | `200 {"message": "Logged out successfully"}` |
+  | GET | `/api/auth/me` | Bearer token | `200 {"userId", "name", "email", "phone", "role", "status", "createdAt", "lastLoginAt"}` |
+
+- **Payment, a stand-in for Team 4.** `POST /api/bookings/{pnr}/demo-pay` (no body, owner only) calls `confirm_booking(pnr)`, just as Team 4 does after a successful payment, and returns the booking as `GET /api/bookings/{pnr}` does. No money changes hands. An already paid booking, an expired hold or a cancelled booking returns `409 WRONG_STATE`. Another customer gets `404`, and STAFF/ADMIN get `403`.
+- **Cancelling after payment.** The owner may cancel passengers of a paid (`CONFIRMED`) booking through `POST /api/bookings/{pnr}/cancel`, so the demo can show seats being released and RAC/waitlist promotion. No refund is issued. `bookingWasPaid: true` and `cancelledFare` say what Team 4 would have refunded. STAFF/ADMIN still get `409 PAID_BOOKING`.
+
 ## Errors
 
 Every error uses Team 1's shape: `{"error": {"code": "...", "message": "...", "constraint": "..."}}`. `constraint` names the database rule that refused the request, when there is one.
@@ -133,11 +161,12 @@ The database raises standard SQLSTATEs, and `ApiExceptionHandler` maps them to t
 PGHOST=localhost PGUSER=postgres ./booking-service/run_tests.sh
 ```
 
-Rebuilds `railway_test` with `setup.sh --reset`, then runs 44 tests:
+Rebuilds `railway_test` with `setup.sh --reset`, then runs 57 tests:
 - **Token rules** (unit tests).
 - **Access rules:** who can reach which endpoint.
 - **Search and availability.**
-- **Booking flows:** confirmed, waitlisted, and promoted after a cancellation; partial and full cancellation; ownership; hold expiry; each database rule coming back as the right HTTP error.
+- **Booking flows:** confirmed, waitlisted, and promoted after a cancellation; partial and full cancellation; ownership; hold expiry; each database rule coming back as the right HTTP error; demo endpoints absent by default.
+- **Demo mode** (`DemoModeApiTest`, with `booking.demo.enabled=true`): login, refresh, logout and `/me`; locked accounts; demo-pay; cancelling a paid booking and the waitlist moving up.
 
 Each API test runs in a transaction that is rolled back. The tests refuse to run on a database whose name doesn't end in `_test`.
 

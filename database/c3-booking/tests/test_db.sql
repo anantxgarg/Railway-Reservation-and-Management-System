@@ -10,7 +10,9 @@ BEGIN;
 SET LOCAL client_min_messages = notice;
 
 -- helper: run SQL, require it to fail with the given SQLSTATE and, when
--- given, the given constraint name (so a test can't pass on the wrong rule)
+-- given, the given constraint name (so a test can't pass on the wrong rule).
+-- want may list several accepted SQLSTATEs separated by '|', for errors whose
+-- code differs between PostgreSQL versions.
 CREATE FUNCTION pg_temp.expect_error(label TEXT, stmt TEXT, want TEXT, want_constraint TEXT DEFAULT NULL)
 RETURNS void LANGUAGE plpgsql AS $$
 DECLARE
@@ -20,7 +22,7 @@ BEGIN
         EXECUTE stmt;
     EXCEPTION WHEN OTHERS THEN
         GET STACKED DIAGNOSTICS got_constraint = CONSTRAINT_NAME;
-        IF SQLSTATE = want AND (want_constraint IS NULL OR got_constraint = want_constraint) THEN
+        IF SQLSTATE = ANY (string_to_array(want, '|')) AND (want_constraint IS NULL OR got_constraint = want_constraint) THEN
             RAISE NOTICE 'PASS  %', label;
             RETURN;
         END IF;
@@ -113,8 +115,11 @@ SELECT pg_temp.expect_error('booking: CONFIRMED must not keep hold_expires_at',
     $$UPDATE booking SET status = 'CONFIRMED' WHERE pnr = 'T000000001'$$, '23514', 'chk_booking_hold_expiry');
 SELECT pg_temp.expect_error('booking: unknown status rejected (enum)',
     $$UPDATE booking SET status = 'PAID' WHERE pnr = 'T000000001'$$, '22P02');
+-- Deleting a row an ON DELETE RESTRICT key still points at: PostgreSQL 16
+-- reports 23503 (foreign_key_violation), PostgreSQL 18 reports 23001
+-- (restrict_violation). Either way the delete is refused.
 SELECT pg_temp.expect_error('booking: user with bookings cannot be deleted',
-    $$DELETE FROM users WHERE email = 'customer@example.com'$$, '23503', 'fk_booking_user');
+    $$DELETE FROM users WHERE email = 'customer@example.com'$$, '23503|23001', 'fk_booking_user');
 
 -- ------------------------------------------------------------- passenger
 SELECT pg_temp.expect_error('passenger: age 0 rejected',
@@ -137,7 +142,7 @@ SELECT pg_temp.expect_error('seat_allocation: one allocation per passenger',
     $$INSERT INTO seat_allocation (passenger_id, seat_id, run_id, from_seq, to_seq)
       SELECT p.passenger_id, fx.seat_id + 1, fx.run_id, 1, 4 FROM passenger p, fx WHERE p.pnr = 'T000000001'$$, '23505', 'seat_allocation_passenger_id_key');
 SELECT pg_temp.expect_error('seat_allocation: seat in use cannot be deleted',
-    $$DELETE FROM seat WHERE seat_id = (SELECT seat_id FROM fx)$$, '23503', 'fk_seat_allocation_seat');
+    $$DELETE FROM seat WHERE seat_id = (SELECT seat_id FROM fx)$$, '23503|23001', 'fk_seat_allocation_seat');
 
 -- ------------------------------------------------------------- cascades
 DELETE FROM booking WHERE pnr = 'T000000001';
@@ -321,7 +326,9 @@ SELECT pg_temp.expect_error('confirm_booking: expired hold rejected',
 
 -- ------------------------------- RAC and waitlist promotion (12622 2A: 48 berths, 4 RAC)
 SELECT create_booking(:uid, :tn7, '2A', 'GN', 1, 4, pg_temp.pax(6)) AS r1 \gset
-SELECT create_booking(:uid, :tn7, '2A', 'GN', 1, 4, pg_temp.pax(6)) FROM generate_series(2, 8) \g /dev/null
+-- (aggregated into one variable rather than "\g /dev/null", which a Windows psql cannot open)
+SELECT string_agg(create_booking(:uid, :tn7, '2A', 'GN', 1, 4, pg_temp.pax(6)), ',') AS r2_to_r8
+FROM generate_series(2, 8) \gset
 SELECT create_booking(:uid, :tn7, '2A', 'GN', 1, 4, pg_temp.pax(6)) AS r9 \gset
 SELECT pg_temp.expect('rac: when berths run out the next 4 get RAC, the rest wait',
     (SELECT string_agg(status_label, ',' ORDER BY passenger_no) FROM v_pnr_status WHERE pnr = :'r9')

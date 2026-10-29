@@ -1,390 +1,357 @@
-# Railway Reservation & Management System
+# Railway Reservation System: Team 3 demo (Booking, PNR & Seats)
 
-Full-stack Railway Reservation & Management System featuring ticket booking, PNR generation, seat inventory, payments, live train status, notifications, analytics, and role-based access control (RBAC).
-
----
-
-## Architecture & Team Modules
-
-| Team | Module | Responsibility | Tech Stack | Status |
-|---|---|---|---|---|
-| **Team 1** | Users & Auth | Authentication, JWT & refresh tokens, RBAC, password reset, audit logging, identity database | Node.js, Express, PostgreSQL, MongoDB, Brevo API | Backend & database implemented; frontend pending (Team 3 added a minimal login page to replace) |
-| **Team 2** | Trains, Stations, Routes | Master train catalog, stations, routes, schedules, coaches, seat layouts | TBD | Not started |
-| **Team 3** | Booking, PNR, Seats | Booking management, PNR generation, seat allocation, waitlist | PostgreSQL, Spring Boot, React + MUI | Database, API and booking screens implemented & tested |
-| **Team 4** | Payments & Refunds | Razorpay payment gateway integration, concession calculations, refund policies | Spring Boot, Razorpay, React + MUI | Implemented |
-| **Team 5** | Reports & Analytics | Reports, analytics, admin dashboards | TBD | Not started |
-| **Team 6** | Notifications, Status, Feedback | Email / SMS notifications, live train status, feedback | TBD | Not started |
-
----
-
-## Running everything
-
-Three backends, one shared PostgreSQL database and one React app. In development the app's dev server forwards each `/api` path to the backend that owns it, so the browser only talks to http://localhost:5173.
-
-| Service | Folder | Port | Owns |
-|---|---|---|---|
-| Users & Auth (Team 1) | `backend/` | 3000 (`PORT`) | `/api/auth`, `/api/users`, `/api/admin` |
-| Booking (Team 3) | `booking-service/` | 8082 (`BOOKING_PORT`) | `/api/search`, `/api/runs`, `/api/bookings` |
-| Payments (Team 4) | repo root | 8081 (`PAYMENTS_PORT`) | `/api/payments`, `/api/refunds`, `/api/concessions` |
-| Frontend (all teams) | `frontend/` | 5173 | the screens |
-
-### Prerequisites
-
-- **PostgreSQL 14+**, with `psql` on the `PATH` (`setup.sh` uses it).
-- **Node.js 18+**, for Team 1's backend and the frontend.
-- **Java 17.** Maven is not needed: both Spring Boot apps have a `./mvnw` wrapper (`mvnw.cmd` on Windows).
-- **MongoDB 6+** is optional. Team 1 writes its audit log there; without it, logins still work and audit logging is skipped.
-- **Razorpay test-mode keys**, to take payments (Team 4, see below).
-
-### 1. Build the shared database
-
-All teams share one database, `railway`. `database/setup.sh` builds it from each team's SQL in dependency order: C1 identity, then C3 booking, with development data (users, a sample network of trains and runs for the next 30 days).
+This branch (`team3`) runs **Team 3's part of the Railway Reservation System on its own**: the booking database, the booking API and the booking screens. You need PostgreSQL, Java and Node.js, and nothing from the other teams.
 
 ```bash
-PGHOST=localhost PGUSER=postgres PGPASSWORD=... ./database/setup.sh            # create and fill "railway"
-PGHOST=localhost PGUSER=postgres PGPASSWORD=... ./database/setup.sh --reset    # drop and rebuild it
+./start-demo.sh          # then open http://localhost:5173 and log in as customer@example.com / Railway@Dev123
 ```
 
-Team 4's tables are created by the payments app itself (Flyway) the first time it starts, so it must start **after** this step.
+Step-by-step instructions, from setup to shutdown: **[run.md](run.md)**.
 
-### 2. Environment variables
+It was cut from `team3` at commit `886af82`. The full system, with every team's services, lives on `main`.
 
-| Variable | Used by | Value |
+---
+
+## Contents
+
+1. [What Team 3 built](#1-what-team-3-built)
+2. [What demo mode stands in for](#2-what-demo-mode-stands-in-for)
+3. [Prerequisites](#3-prerequisites)
+4. [Quick start](#4-quick-start)
+5. [Starting it by hand](#5-starting-it-by-hand)
+6. [Demo accounts](#6-demo-accounts)
+7. [A 5-minute demo](#7-a-5-minute-demo)
+8. [Tests](#8-tests)
+9. [What was removed from this branch](#9-what-was-removed-from-this-branch)
+
+---
+
+## 1. What Team 3 built
+
+| Part | Folder | What it is |
 |---|---|---|
-| `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD` | `setup.sh` and all three backends | The same everywhere. Defaults: `localhost`, `5432`, `railway`, `postgres` |
-| `JWT_SECRET` | all three backends | **One shared secret**, at least 32 characters. Team 1 signs logins with it; booking and payments check the tokens with it |
-| `MONGO_URI` | Team 1 | e.g. `mongodb://localhost:27017/railway` |
-| `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | payments | Razorpay test-mode keys; the webhook secret is any string you also enter in the Razorpay dashboard |
-| `PORT`, `BOOKING_PORT`, `PAYMENTS_PORT` | Team 1, booking, payments | Only to change the ports above |
-| `AUTH_URL`, `BOOKING_URL`, `PAYMENTS_URL` | frontend dev server | Only when a backend isn't on its default port, e.g. `PAYMENTS_URL=http://localhost:8091` |
-
-Team 1 reads `backend/.env` (copy `backend/.env.example`; see Team 1 below). The Spring Boot apps and the frontend read the environment.
-
-Generate a secret once and use it for all three: `node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"`
-
-### 3. Start the services
-
-Each in its own terminal, after step 1. The backends don't depend on each other at startup, but the payments app needs the booking tables.
-
-```bash
-# shared by the terminals below
-export PGHOST=localhost PGUSER=postgres PGPASSWORD=...
-export JWT_SECRET=<the shared secret>
-
-cd backend && npm ci && npm start                      # Team 1, :3000 (reads backend/.env)
-cd booking-service && ./mvnw spring-boot:run           # Team 3, :8082
-RAZORPAY_KEY_ID=rzp_test_... RAZORPAY_KEY_SECRET=... RAZORPAY_WEBHOOK_SECRET=... \
-  ./mvnw spring-boot:run                               # Team 4, :8081, from the repo root
-cd frontend && npm ci && npm run dev                   # :5173
-```
-
-On Windows use `mvnw.cmd`, and `set NAME=value` instead of `export`.
-
-Open http://localhost:5173 and log in as `customer@example.com` with password `Railway@Dev123` (`staff@` and `admin@example.com` too). Book a ticket from `NDLS` to `MAS`, `BCT` or `NGP` on any of the next 30 days, then pay with Razorpay's test card `4111 1111 1111 1111`.
-
-### Tests
-
-| Suite | Command | Database |
-|---|---|---|
-| Team 1 unit | `cd backend && npm test` | none |
-| Team 1 database | `cd backend && npm run test:db` | `railway_test` |
-| C3 database | `./database/c3-booking/tests/run_tests.sh` | creates and drops `railway_c3_test` |
-| Booking API | `./booking-service/run_tests.sh` | rebuilds `railway_test` |
-| Payments | `PGDATABASE=railway_test ./database/setup.sh --reset && ./mvnw test` | `railway_test` |
-
-All need the `PG*` variables. None of them touch `railway`. Razorpay is mocked in the payments tests, so they need no keys. Several suites rebuild `railway_test`, so run them one at a time.
-
-### Troubleshooting
-
-- **Every call to booking or payments returns 401 after logging in.** The backends don't share the same `JWT_SECRET`.
-- **The payments app stops at startup with a Flyway error about `booking`.** The shared database hasn't been built yet; run step 1 first.
-- **Port 8081 (or another) is already in use.** Start the app on another port (`PAYMENTS_PORT=8091`) and tell the frontend (`PAYMENTS_URL=http://localhost:8091 npm run dev`).
-- **The `booking` foreign key to `users` disappeared.** Team 1's `schema.sql` drops `users` with `CASCADE`. Rebuild everything with `setup.sh --reset` instead of rerunning one team's files.
-
----
-
-## Team 1 — Users & Auth
-
-The authentication backend provides secure user identity management, credential hashing, session tokens, account lockout protection, and transactional email password resets.
-
-Detailed API specifications, request/response schemas, and error codes are documented in [`docs/API.md`](docs/API.md).
-Database schemas and role-permission matrices are documented in [`database/c1-identity/README.md`](database/c1-identity/README.md).
-
-### Prerequisites
-
-- **Node.js**: `v18.0.0` or higher (`v20+` recommended)
-- **PostgreSQL**: `14+` (running locally or accessible over network, port `5432`)
-- **MongoDB**: `6+` (for audit logging, port `27017`)
-
-### Setup & Installation
-
-1. **Navigate to the backend directory and install dependencies:**
-
-   ```bash
-   cd backend
-   npm install
-   ```
-
-2. **Configure Environment Variables:**
-
-   Copy the example environment file:
-
-   ```bash
-   cp .env.example .env
-   ```
-
-   Configure the local variables in `backend/.env` (never commit this file):
-
-   | Variable | Description | Default / Example |
-   |---|---|---|
-   | `PGHOST` | PostgreSQL host | `localhost` |
-   | `PGPORT` | PostgreSQL port | `5432` |
-   | `PGDATABASE` | Application database name | `railway` |
-   | `PGUSER` | Database user | `postgres` |
-   | `PGPASSWORD` | Database password | *your_local_password* |
-   | `MONGO_URI` | MongoDB connection URI for audit logging | `mongodb://localhost:27017/railway` |
-   | `JWT_SECRET` | Secret key for signing HS256 access tokens (min 64 chars) | *random_64_char_hex_string* |
-   | `JWT_EXPIRES_IN` | Access token lifespan | `15m` |
-   | `REFRESH_TOKEN_EXPIRES_DAYS` | Refresh token lifespan | `7` |
-   | `RESET_TOKEN_EXPIRES_MINUTES`| Password reset token lifespan | `60` |
-   | `DEV_EXPOSE_RESET_TOKEN` | Expose raw reset token in API responses (dev only) | `false` |
-   | `BREVO_API_KEY` | Brevo Transactional Email API v3 key | `your_brevo_api_key_here` |
-   | `EMAIL_FROM` | Sender address verified in Brevo | `"Railway Reservation" <noreply@yourdomain.com>` |
-   | `FRONTEND_URL` | Frontend client base URL for reset links | `http://localhost:5173` |
-   | `LOGIN_LOCKOUT_THRESHOLD` | Consecutive failed logins before account locks | `5` |
-   | `PORT` | Backend HTTP port | `3000` |
-   | `NODE_ENV` | Environment mode (`development`, `test`, `production`) | `development` |
-   | `CORS_ORIGIN` | Allowed CORS origin | `http://localhost:5173` |
-
-   > **Note:** Generate a secure JWT secret with:
-   > ```bash
-   > node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
-   > ```
-
-3. **Initialize the Database:**
-
-   To build the shared database with every team's tables, use `database/setup.sh` (see [Running everything](#running-everything)). To build only C1, run the scripts in order against the `railway` database:
-
-   ```bash
-   createdb railway
-   psql -d railway -v ON_ERROR_STOP=1 -f database/c1-identity/schema.sql
-   psql -d railway -v ON_ERROR_STOP=1 -f database/c1-identity/schema_auth_tokens.sql
-   psql -d railway -v ON_ERROR_STOP=1 -f database/c1-identity/seed.sql
-   psql -d railway -v ON_ERROR_STOP=1 -f database/c1-identity/seed_dev_users.sql
-   ```
-
-   *(Optional: Initialize MongoDB audit log schema via `mongosh "mongodb://localhost:27017/railway" database/c1-identity/mongo/audit_log.js`)*
-
-### Starting the Server
-
-- **Development mode (with nodemon auto-reload):**
-  ```bash
-  cd backend
-  npm run dev
-  ```
-- **Production mode:**
-  ```bash
-  cd backend
-  npm start
-  ```
-
-**Health Check:**
-```bash
-curl http://localhost:3000/health
-# Response: {"status":"ok","timestamp":"2026-10-19T00:00:00.000Z"}
-```
-
-### Running Tests
-
-The test suite includes both offline unit tests (mocked DB and Brevo) and live PostgreSQL integration tests.
-
-- **Offline Unit Tests (174 tests):**
-  ```bash
-  cd backend
-  npm test
-  ```
-- **Database Integration Tests (46 tests):**
-  ```bash
-  cd backend
-  npm run test:db
-  ```
-  *Note: Integration tests strictly require a separate `railway_test` database. Built-in safety guards (`tests/helpers/dbGuard.js`) refuse to run against the production/dev `railway` database.*
-
-### Authentication API Endpoints Summary
-
-All request bodies and responses use JSON (`Content-Type: application/json`).
-
-| Method | Endpoint | Access | Purpose |
-|---|---|---|---|
-| `POST` | `/api/auth/register` | Public | Register new `CUSTOMER` account with bcrypt hash |
-| `POST` | `/api/auth/login` | Public | Authenticate with email/password; returns access & refresh tokens |
-| `GET` | `/api/auth/me` | Authenticated | Retrieve profile for authenticated user (`req.user`) |
-| `POST` | `/api/auth/logout` | Authenticated | Revoke refresh token and terminate session |
-| `POST` | `/api/auth/refresh` | Public | Rotate refresh token and issue new access token pair |
-| `POST` | `/api/auth/change-password` | Authenticated | Change password and revoke all active refresh tokens |
-| `POST` | `/api/auth/forgot-password` | Public | Request password reset email via Brevo transactional API |
-| `POST` | `/api/auth/reset-password` | Public | Reset password using one-time token |
-| `GET` | `/api/users` | Admin (`MANAGE_USERS`) | Paginated user management list |
-| `POST` | `/api/admin/users/:id/unlock` | Admin (`MANAGE_USERS`) | Unlock account locked by failed login attempts |
-| `POST` | `/api/admin/staff` | Admin (`MANAGE_STAFF`) | Create staff user via atomic procedure |
-
-### Development Test Accounts
-
-Configured in `database/c1-identity/seed_dev_users.sql` (all use password: `Railway@Dev123`):
-
-| Email | Role | Status | Description |
-|---|---|---|---|
-| `customer@example.com` | `CUSTOMER` | `ACTIVE` | Standard passenger user |
-| `staff@example.com` | `STAFF` | `ACTIVE` | Railway staff user (Reservations, NDLS) |
-| `admin@example.com` | `ADMIN` | `ACTIVE` | System administrator with full permissions |
-| `locked@example.com` | `CUSTOMER` | `LOCKED` | Account locked for lockout testing |
-| `suspended@example.com` | `CUSTOMER` | `SUSPENDED` | Suspended account testing |
-
----
-
-## Team 3 — Booking, PNR & Seats
-
-Search, availability, booking, PNR status and cancellation, with seat allocation, RAC and waitlist.
-- **Database:** [`database/c3-booking/`](database/c3-booking/README.md) holds the tables, triggers, procedures and views where the booking rules live. It also has placeholder copies of the network tables (Team 2) and `concession_rule` (Team 4) until those teams take them over.
-- **API:** [`booking-service/`](booking-service/README.md), Spring Boot on port 8082. It accepts Team 1's login tokens, so it needs the same `JWT_SECRET`.
-
-```bash
-PGHOST=localhost PGUSER=postgres ./database/setup.sh                      # shared database
-cd booking-service && PGHOST=localhost PGUSER=postgres JWT_SECRET=<Team 1's secret> ./mvnw spring-boot:run
-```
-
-The screens (search, passengers, review and pay, PNR status, my bookings) are in [`frontend/`](frontend/README.md). The tables, rules and views are listed in the [data dictionary](database/c3-booking/DATA_DICTIONARY.md).
-
-Tests:
-
-```bash
-PGHOST=localhost PGUSER=postgres ./database/c3-booking/tests/run_tests.sh   # database; builds and drops railway_c3_test
-PGHOST=localhost PGUSER=postgres ./booking-service/run_tests.sh             # API; rebuilds railway_test
-```
-
----
-
-## Team 4 — Payments & Refunds (Razorpay Payment Gateway)
-
-Spring Boot 3 / Java 17 app covering **payments, refunds and passenger concessions** for bookings made through Team 3's booking service. A booking is identified by its **PNR**.
-
-### Run
-
-1. Build the shared database first; this app's migrations need the booking tables: `PGHOST=localhost PGUSER=postgres ./database/setup.sh`
-2. Get **test mode** keys: Razorpay Dashboard → Account & Settings → API Keys.
-3. Set the environment and start the app. Nothing secret is stored in `application.properties`, so the app won't start without these:
-   ```bash
-   export PGHOST=localhost PGUSER=postgres PGPASSWORD=...     # same as setup.sh
-   export JWT_SECRET=...                                      # Team 1's secret
-   export RAZORPAY_KEY_ID=rzp_test_xxxxxxxx
-   export RAZORPAY_KEY_SECRET=xxxxxxxx
-   export RAZORPAY_WEBHOOK_SECRET=any_string_you_choose
-   ./mvnw spring-boot:run
-   ```
-   The API is on port 8081. Set `PAYMENTS_PORT` to change it.
-
-Flyway creates this app's tables (`V1`, `V2`). It baselines at version 0, so it also works on the shared database where other teams' tables already exist. Hibernate only validates the schema (`ddl-auto=validate`).
-
-Logins are Team 1's. Every endpoint except the webhook and the concession preview needs `Authorization: Bearer <token>` from Team 1's `POST /api/auth/login`. The app's old development login (`/api/auth/login` on this port) has been removed.
-
-The screens are in the shared React app, [`frontend/`](frontend/README.md): `components/checkout.js` (Razorpay Checkout for a PNR), `MyPayments`, `Refunds` and `Concessions`. The app no longer serves a copy of the frontend from `src/main/resources/static/`.
-
-### Flow
-
-```
-(Team 3) POST /api/bookings          -> PNR, HELD for 15 minutes
-POST /api/payments/order {pnr}       -> Razorpay order for the booking's amount (booking.total_fare)
-   (browser: Razorpay Checkout)
-POST /api/payments/verify            -> signature check; confirm_booking(pnr) in the same transaction
-POST /api/payments/webhook           -> same result via Razorpay callback (safety net)
-GET  /api/refunds/preview/{pnr}?passengerIds=...
-POST /api/refunds {pnr, passengerIds} -> cancel_passengers + Razorpay refund, in one transaction
-```
-
-- **Payments that can't confirm their booking are refunded in full automatically:**
-  - the 15-minute hold expired before the payment arrived;
-  - passengers were dropped after the order was created, so the amount changed;
-  - a second payment arrived for a booking that's already paid.
-- **Cancellation and refund go together.** If Razorpay refuses the refund, the cancellation is rolled back and the passengers keep their seats.
-- **Unpaid bookings** are cancelled through Team 3's booking service.
-
-### Endpoints
-
-All of these need a Team 1 login unless marked public. Customers only see their own bookings; for anyone else's PNR they get 404.
-
-| Method | Path | Who | Purpose |
-|---|---|---|---|
-| GET | `/api/concessions/preview?category=STUDENT&baseFare=500` | public | Fare after concession |
-| POST | `/api/payments/order` | CUSTOMER (owner) | `{ "pnr": "1000000016" }` |
-| POST | `/api/payments/verify` | CUSTOMER (owner) | `{ razorpayOrderId, razorpayPaymentId, razorpaySignature }` |
-| POST | `/api/payments/webhook` | Razorpay (HMAC signature) | Razorpay callback |
-| GET | `/api/payments/booking/{pnr}` | owner, STAFF, ADMIN | Payments for a booking |
-| GET | `/api/payments/my` | CUSTOMER | My payments |
-| GET | `/api/refunds/preview/{pnr}?passengerIds=12,13` | owner, STAFF, ADMIN | What cancelling would refund (no ids = everyone left) |
-| POST | `/api/refunds` | owner, STAFF, ADMIN | `{ "pnr": "...", "passengerIds": [12], "reason": "..." }` (no ids = everyone left) |
-| GET | `/api/refunds/booking/{pnr}` | owner, STAFF, ADMIN | Refunds for a booking |
-| GET | `/api/refunds/my` | CUSTOMER | My refunds |
-| POST | `/api/concessions/apply` | CUSTOMER, ADMIN | `{ "pnr", "passengerId", "category", "idCardType", "idCardNumber" }` |
-| GET | `/api/concessions/pending`, POST `/api/concessions/{id}/review` | STAFF, ADMIN | Verify concession documents |
-| GET | `/api/concessions/booking/{pnr}` | owner, STAFF, ADMIN | Applications for a booking |
-
-### Tests
-
-```bash
-PGHOST=localhost PGUSER=postgres PGDATABASE=railway_test ./database/setup.sh --reset
-PGHOST=localhost PGUSER=postgres ./mvnw test
-```
-
-The unit tests need no database. The integration tests (`web/*Test`) run against `railway_test`, with Razorpay replaced by a mock, so no real payments are made. They cover:
-- order, verify and webhook;
-- late, outdated and duplicate payments;
-- partial and full refunds, and a refused refund rolling the cancellation back;
-- concessions and logins.
-
-### Concession rules (`application.properties`)
-
-Percent off base fare: GENERAL 0, SENIOR_CITIZEN 40, STUDENT 25, CHILD 50, DIFFERENTLY_ABLED 50, ARMED_FORCES 30. These are placeholder numbers; change them to whatever the group agrees on.
-
-### Refund policy (`application.properties`)
-
-Refund is a percentage of the **amount actually paid** (after concession):
-
-| Time before departure | Refund |
+| Database (C3) | [`database/c3-booking/`](database/c3-booking/README.md) | PostgreSQL tables, functions, triggers, procedures and views. **All booking rules live here.** |
+| Booking API | [`booking-service/`](booking-service/README.md) | Spring Boot 3.3 / Java 17 on port **8082**. Checks who is calling, calls the C3 functions through `JdbcTemplate`, and turns database errors into HTTP errors. |
+| Booking screens | `frontend/src/features/booking/` | React + Material UI (Vite) on port **5173**: search, passenger form, PNR page, PNR lookup, my bookings. |
+
+### Database: `database/c3-booking/`
+
+Every column, rule and constraint name is in [`DATA_DICTIONARY.md`](database/c3-booking/DATA_DICTIONARY.md). The schema as built is in `c3_booking.dbml`, which you can paste into dbdiagram.io.
+
+**Tables**
+- `booking`: one row per PNR. Its status is `HELD`, `CONFIRMED`, `CANCELLED` or `EXPIRED`.
+- `passenger`: 1 to 6 per PNR. Each passenger is `CONFIRMED`, `RAC`, `WAITLIST` or `CANCELLED`, and has a queue number and a fare.
+- `seat_allocation`: which berth a confirmed passenger holds, on which run, between which stops.
+- `quota`: `GN` General, `TK` Tatkal (×1.3), `LD` Ladies, `SR` Senior.
+
+Team 2's network tables (`station`, `train`, `route`, `train_run`, `train_coach`, `seat`, ...) and Team 4's `concession_rule` are placeholders written by Team 3, so the booking tables have something to point at.
+
+**Functions** (`04_functions.sql`)
+- `generate_pnr()`: a 10-digit PNR, 9 digits from a sequence plus a Luhn check digit. `is_valid_pnr()` checks one.
+- `calc_fare(...)`: distance × class rate × quota multiplier, minus any concession, plus the reservation charge. This is a placeholder for Team 4.
+- `free_seats(...)`: berths that are free for the whole journey.
+- `rac_capacity(run, class)`: 4 RAC places per 2A coach, 8 per 3A or SL coach, none in 1A or the sitting classes.
+- `availability(run, class, from, to)`: availability per class for one journey.
+
+**Triggers and constraints** (`05_constraints_triggers.sql`)
+- **No double booking:** an exclusion constraint on `seat_allocation` (`btree_gist`) refuses any overlapping use of a berth on the same run, whatever code tries it. Journeys that only touch at a stop don't overlap, so a berth freed at KOTA is sold again from KOTA.
+- **At most 6 passengers per PNR.** This check locks the booking row, so two inserts at once can't both get through.
+- **Status flow:**
+  - Booking: `HELD` → `CONFIRMED` / `CANCELLED` / `EXPIRED`, and `CONFIRMED` → `CANCELLED`.
+  - Passenger: `WAITLIST` → `RAC` / `CONFIRMED`, and `RAC` → `CONFIRMED`. Any of them can become `CANCELLED`.
+  - Nothing else is allowed.
+- **Valid journeys:**
+  - The run has a schedule for its weekday.
+  - Both stops are on its route.
+  - The train has a coach of the booked class.
+  - An allocated berth belongs to that train and class.
+- **Immutable fields:** a PNR's user, run, class, quota and stops never change.
+- **Fare total:** while a booking is `HELD`, `total_fare` is kept equal to the sum of the fares of passengers who aren't cancelled.
+- **Berths match status:** a deferred check makes sure a passenger is `CONFIRMED` exactly when they hold a berth.
+
+**Procedures** (`06_procedures.sql`)
+
+| Call | What it does |
 |---|---|
-| 48h or more | 90% |
-| 24h to 48h | 75% |
-| 4h to 24h | 50% |
-| under 4h | no refund (cancelling is still allowed and frees the seats) |
+| `create_booking(user, run, class, quota, from, to, passengers_json)` | Gives each passenger a berth if one is free for the whole journey, else an RAC place, else a waitlist place. Returns a PNR that is `HELD` for **15 minutes**. |
+| `confirm_booking(pnr)` | `HELD` → `CONFIRMED`, and returns the amount to charge. Calling it twice is safe; it fails once the hold has expired. This is what payment calls. |
+| `cancel_passengers(pnr, ids)` | Cancels some passengers, or everyone when `ids` is `NULL`. Frees their berths, cancels the booking once nobody is left, and promotes the queue. Returns each cancelled passenger's fare, for the refund. |
+| `promote_queue(run, class)` | Hands freed berths to **RAC first, then the waitlist**, in queue order. Waitlisted passengers can also move into freed RAC places. |
+| `expire_holds()` | Unpaid holds past their expiry become `EXPIRED`, and their berths go to the queue. booking-service runs it **every minute**. |
 
-The refund is worked out on what was paid for the passengers being cancelled. The schema has no departure time yet (Team 2), so departure is taken as the start of the travel day in India (00:00 IST). That never gives more refund than the policy allows.
+**Views** (`07_views.sql`)
+- `v_pnr_status`: one row per passenger, with a ticket-style label: `CNF/B1/23/LB`, `RAC 3`, `WL 12` or `CAN`. It also gives each queued passenger's current position.
+- `v_user_bookings`, `v_run_availability`, `v_run_route`.
 
-### Webhook setup (optional for local testing)
+**Race-safe seat allocation.** Every procedure that hands out berths first takes an advisory lock on the (run, class), so concurrent bookings for one class are served one at a time. The exclusion constraint is the second line of defence. The test suite starts 10 sessions at once for the last free berth: exactly one gets it, the other nine get WL 1 to 9, and no berth is sold twice.
 
-1. Expose your app: `ngrok http 8081`.
-2. Dashboard → Webhooks → Add: URL `https://<ngrok>/api/payments/webhook`, secret = `RAZORPAY_WEBHOOK_SECRET`.
-3. Enable events: `payment.captured`, `payment.failed`, `refund.processed`, `refund.failed`.
+**Errors** use standard SQLSTATEs, which booking-service maps to HTTP status codes:
 
-### Testing in test mode
+| SQLSTATE | Meaning | HTTP |
+|---|---|---|
+| `P0002` | not found | 404 |
+| `22023` | bad input | 422 |
+| `23514` | a rule was broken (the constraint name says which) | 422 |
+| `55000` | wrong state, e.g. the hold expired | 409 |
+| `42501` | user not allowed | 403 |
 
-- Card: `4111 1111 1111 1111`, any future expiry, any CVV, any OTP.
-- UPI: `success@razorpay` (success) or `failure@razorpay` (failure).
-- Make sure payments are set to **auto-capture** in Dashboard → Settings → Configuration → Payment Capture, otherwise they stay "authorized" and refunds will fail.
+### Booking API: `booking-service/` (port 8082)
 
-### Things to revisit
+| Method | Path | Who | What |
+|---|---|---|---|
+| GET | `/api/search?from=NDLS&to=MAS&date=YYYY-MM-DD` | anyone | Trains that stop at `from` and later at `to` on that date, with availability and fare per class |
+| GET | `/api/runs/{runId}/availability?class=3A&from=NDLS&to=NGP` | anyone | Berths, RAC and waitlist per class for one journey |
+| POST | `/api/bookings` | CUSTOMER | Book 1 to 6 passengers and hold them for 15 minutes. Returns `201` with the booking |
+| GET | `/api/bookings/mine` | logged in | The caller's bookings, newest first |
+| GET | `/api/bookings/{pnr}` | owner, STAFF, ADMIN | PNR status with every passenger |
+| POST | `/api/bookings/{pnr}/cancel` | owner, STAFF, ADMIN | Cancel some passengers (`{"passengerIds": [..]}`), or everyone when there is no body |
 
-- **Concessions have two sources of truth:**
-  - Team 3's `concession_rule` table, applied per passenger at booking, which changes the fare paid;
-  - this app's `concession.*` percentages and staff-verified applications, which don't change the fare yet.
+Two more rules:
+- A customer who asks for someone else's PNR gets `404`, not `403`, so nobody can probe which PNRs exist.
+- Errors look like `{"error": {"code", "message", "constraint"}}`.
 
-  Agree on one, then remove the other.
-- **Departure time for the refund windows** (see Refund policy).
-- **Waitlisted passengers when the chart is prepared.** If they still have no berth, they should be refunded in full automatically.
-- **A reconciliation job** for orders stuck in `CREATED`.
-- **Error format.** This app answers `{"error": "message"}`, while Team 1 and Team 3 answer `{"error": {"code", "message"}}`.
-- **Gateway errors reach customers word for word.** A refused Razorpay call comes back as e.g. `Could not create refund: Status Code: 404 Server response: {...}`. Log the details and show a plain message instead.
+Request and response examples are in [`booking-service/README.md`](booking-service/README.md).
+
+### Screens: `frontend/` (port 5173)
+
+| Route | Screen |
+|---|---|
+| (not logged in) | Log in |
+| `#/search` | Search trains by station codes and date, with availability and fare per class |
+| `#/book/{runId}/{class}/{from}/{to}` | Passenger form, 1 to 6 passengers; submitting holds the seats |
+| `#/pnr/{pnr}` | The booking: 15-minute hold countdown, pay, status of each passenger (`CNF/B1/1/LB`, `RAC 2`, `WL 1`), cancel passengers |
+| `#/pnr` | PNR lookup |
+| `#/bookings` | My bookings |
+
+The Vite dev server forwards `/api/...` to booking-service, so the browser only ever talks to http://localhost:5173.
 
 ---
 
-## License
+## 2. What demo mode stands in for
 
-This project is licensed under the Apache License 2.0 — see the [LICENSE](LICENSE) file for details.
+In the full system, two other teams' services sit around booking:
+- **Team 1** (`backend/`: Node.js, PostgreSQL and MongoDB) logs users in and issues the JWTs that booking-service checks.
+- **Team 4** (Spring Boot and Razorpay) takes the payment and then calls `confirm_booking(pnr)`.
+
+Running both just to show booking would need MongoDB and Razorpay keys. Instead, booking-service has a **demo mode**, turned on with `BOOKING_DEMO=true` (`start-demo.sh` turns it on for you). It adds two stand-ins:
+
+| Stand-in | Replaces | How it works |
+|---|---|---|
+| `POST /api/auth/login`, `/refresh`, `/logout`, `GET /api/auth/me` | Team 1's login backend | Same endpoints and JSON as Team 1. It checks the password against the bcrypt hash in C1's `users` table, and only `ACTIVE` accounts get in. Tokens are made the way Team 1 makes them: HS256, signed with `JWT_SECRET`, 15 minutes. So booking-service verifies them exactly as it verifies Team 1's tokens. |
+| `POST /api/bookings/{pnr}/demo-pay` | Team 4's Razorpay payment | Calls `confirm_booking(pnr)` straight away (what Team 4 calls after a successful payment). No money changes hands. |
+
+A few things the stand-ins don't do:
+- The login stand-in doesn't count failed attempts or lock accounts, and writes no audit log.
+- Refresh tokens are kept in memory, so restarting the service logs everybody out.
+- In demo mode a paid (`CONFIRMED`) booking is also cancelled with `POST /api/bookings/{pnr}/cancel`, and no refund is made. In the full system that goes through Team 4's refunds.
+- Registration and password reset are Team 1's and aren't part of the demo.
+
+Demo mode is **off by default**. With it off, booking-service behaves exactly as it does in the integrated system. Never turn it on next to the real Team 1 and Team 4 services.
+
+---
+
+## 3. Prerequisites
+
+| Tool | Version | Check with |
+|---|---|---|
+| PostgreSQL server | 14 or newer, running | |
+| PostgreSQL client (`psql`, `createdb`, `dropdb`) | 14 or newer, on the `PATH` | `psql --version` |
+| Java (JDK) | 17 or newer | `java -version` |
+| Node.js and npm | 18 or newer (20 recommended) | `node -v` |
+| curl, bash | any | Git Bash on Windows has both |
+
+You don't need Maven: `booking-service/` has its own wrapper (`./mvnw`, or `mvnw.cmd` on Windows), and the first run downloads Maven 3.8.7.
+
+On **Windows**, install Git for Windows, Node.js LTS, Temurin JDK 17 and PostgreSQL (tick "Command Line Tools", and add its `bin` folder to `PATH`). Run everything in **Git Bash**.
+
+No PostgreSQL yet? With Docker:
+
+```bash
+docker run -d --name railway-postgres -e POSTGRES_PASSWORD=postgres -p 5432:5432 postgres:16
+```
+
+### `.env` (optional)
+
+`start-demo.sh` reads a `.env` file in the repo root. Git ignores it, so it is never committed. Anything you leave out gets the default shown here:
+
+```bash
+PGHOST=localhost
+PGPORT=5432
+PGUSER=postgres
+PGPASSWORD=postgres          # your PostgreSQL password
+PGDATABASE=railway
+# Signs login tokens. Leave it out and start-demo.sh makes a random one per run
+# (you're then logged out after each restart). To keep one:
+#   node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+JWT_SECRET=
+# BOOKING_PORT=8082
+```
+
+---
+
+## 4. Quick start
+
+```bash
+./start-demo.sh            # first run builds the "railway" database, later runs reuse it
+./start-demo.sh --reset    # drop and rebuild the database first (fresh seats and dates)
+```
+
+The script:
+1. Loads `.env`, checks that `psql`, `createdb`, `java`, `node`, `npm` and `curl` are installed, and checks it can reach PostgreSQL.
+2. Builds the database with `database/setup.sh` if the `booking` table doesn't exist yet, or always with `--reset`.
+3. Starts booking-service with `BOOKING_DEMO=true` and waits until port 8082 answers. The first start downloads Maven and the dependencies, which can take a few minutes.
+4. Runs `npm install` in `frontend/` if needed, starts the dev server, and prints the URL and the logins.
+5. **Ctrl+C stops both.** On Windows it kills the whole `java.exe` / `node.exe` process trees.
+
+Logs are in `logs/booking-service.log` and `logs/frontend.log`.
+
+The sample trains have runs for the 30 days after the database was built. If the script warns that they have run out, use `--reset`.
+
+---
+
+## 5. Starting it by hand
+
+Three terminals, all opened in the repo root (Git Bash on Windows):
+
+```bash
+# 1. database (once; add --reset to rebuild)
+set -a; source .env; set +a          # or export PGHOST/PGUSER/PGPASSWORD yourself
+./database/setup.sh
+
+# 2. booking-service, demo mode
+set -a; source .env; set +a          # JWT_SECRET must be set here
+cd booking-service
+BOOKING_DEMO=true ./mvnw spring-boot:run
+
+# 3. frontend
+cd frontend
+npm install
+npm run dev                          # http://localhost:5173
+```
+
+`database/setup.sh` builds the C1 identity tables and dev users (Team 1's SQL, because `booking.user_id` references `users`), then the C3 booking tables and seed data. If the database is already built it stops with exit code 1; use `--reset` to rebuild it.
+
+In Windows `cmd.exe`, set each variable with `set NAME=value` and use `mvnw.cmd spring-boot:run`.
+
+---
+
+## 6. Demo accounts
+
+From `database/c1-identity/seed_dev_users.sql`. The password for every account is **`Railway@Dev123`**.
+
+| E-mail | Role | Status | In the demo |
+|---|---|---|---|
+| `customer@example.com` | CUSTOMER | ACTIVE | Search, book, pay (demo), cancel, my bookings |
+| `staff@example.com` | STAFF | ACTIVE | Search and open or cancel any PNR. Can't book (`403`) |
+| `admin@example.com` | ADMIN | ACTIVE | Same as staff |
+| `locked@example.com` | CUSTOMER | LOCKED | Login is refused (only `ACTIVE` accounts get in) |
+| `suspended@example.com` | CUSTOMER | SUSPENDED | Login is refused |
+
+### Seed network
+
+From `database/c3-booking/seed_dev.sql`. Every train runs daily, for the 30 days after the database was built.
+
+| Train | Route (stop order) | Classes and coaches |
+|---|---|---|
+| **12952** Mumbai Rajdhani Express | NDLS → KOTA → BRC → BCT | 1A ×1 (H1, 18 berths, no RAC), 2A ×2 (A1–A2), 3A ×3 (B1–B3) |
+| **12622** Tamil Nadu Express | NDLS → BPL → NGP → MAS | 2A ×1 (A1, 48 berths, 4 RAC), 3A ×2 (B1–B2), SL ×4 (S1–S4) |
+| **12127** Mumbai Pune Intercity | CSMT → PUNE | 2S ×4 (D1–D4, sitting) |
+
+---
+
+## 7. A 5-minute demo
+
+Log in as `customer@example.com` / `Railway@Dev123`.
+
+**Optional setup (10 seconds, before the audience arrives).** This fills the Tamil Nadu Express in 2A, **7 days from today**, so the RAC and waitlist part of the demo has something to show. It makes 8 confirmed bookings of 6 passengers (all 48 berths) and one booking of 3, which gets RAC 1 to 3. They are ordinary bookings of `customer@example.com`, so they show up under My bookings.
+
+```bash
+set -a; source .env; set +a
+psql -X -v ON_ERROR_STOP=1 <<'SQL'
+DO $$
+DECLARE
+  u   INT := (SELECT user_id FROM users WHERE email = 'customer@example.com');
+  r   INT := (SELECT run_id FROM train_run WHERE train_no = '12622' AND run_date = CURRENT_DATE + 7);
+  pax JSONB;
+BEGIN
+  FOR i IN 1..9 LOOP
+    SELECT jsonb_agg(jsonb_build_object('name', 'Filler ' || i || '-' || n, 'age', 30, 'gender', 'M'))
+      INTO pax FROM generate_series(1, CASE WHEN i <= 8 THEN 6 ELSE 3 END) AS n;
+    PERFORM confirm_booking(create_booking(u, r, '2A', 'GN', 1, 4, pax));   -- NDLS (stop 1) -> MAS (stop 4)
+  END LOOP;
+END $$;
+SQL
+```
+
+### Part 1: a normal booking
+
+1. **Search.** From `NDLS` to `BCT`, any date in the next few days. The Mumbai Rajdhani (12952) appears with availability and fare per class (1A / 2A / 3A).
+2. **Availability.** Point out free berths, RAC and waitlist per class. Then search `NDLS` → `KOTA` on the same date: fares are by distance, and availability is for that journey only.
+3. **Book 3 passengers** in 3A, NDLS → BCT. Make one of them 66 years old.
+   - The PNR page opens. The booking is **HELD**, with a 15-minute countdown.
+   - Each passenger already has a berth (`CNF/B1/1/LB`, ...).
+   - Explain that the berths are held, not sold. If nobody pays, `expire_holds()` releases them within a minute of the hold running out.
+4. **Pay.** The booking becomes **CONFIRMED** and `total_fare` is now fixed. This is the demo-mode stand-in for Team 4's Razorpay payment. Underneath it is the same `confirm_booking(pnr)` that Team 4 calls.
+5. **Cancel one passenger.** Their label becomes `CAN` and their berth is free again. The others keep their berths.
+
+### Part 2: RAC and waitlist
+
+6. **RAC and waitlist.** Search `NDLS` → `MAS` for the date **7 days from today** (the date filled in the setup). The Tamil Nadu Express (12622) shows 2A with 0 berths free and 1 RAC place left.
+   - Book 2 passengers in 2A. The first gets **`RAC 4`**, the second **`WL 1`**.
+   - Pay, so the booking is CONFIRMED and keeps its queue places.
+7. **Promotion.** Open **My bookings**. Find the filler booking with 3 passengers (the RAC 1–3 one) and cancel it.
+   - Back on your PNR: your RAC passenger's position has gone from `RAC 4` to **`RAC 1`**, and your waitlisted passenger has moved into a freed RAC place (**`RAC 2`**).
+   - Then cancel one passenger of a 6-passenger filler booking. That frees a berth, and the first in the RAC queue gets it: your passenger is now **`CNF/A1/<berth>/<type>`**, and the other moves up to `RAC 1`.
+   - `promote_queue` serves RAC first, then the waitlist, in queue order.
+8. **My bookings.** Every PNR with its status, journey, passenger count and fare.
+
+### Extras, if there's time
+
+- Log in as `staff@example.com` and open your PNR with **PNR lookup**. Staff can see any PNR, but booking is refused.
+- Try 7 passengers, or an age of 0, or a station the train doesn't stop at. Each error comes back from a named database rule (`chk_passenger_age`, `trg_booking_valid_stops`, ...).
+- Mention the race test: 10 sessions fight for the last berth, exactly one wins, and the other nine are waitlisted ([§8](#8-tests)).
+
+Without the optional setup, you can still show the waitlist on the Rajdhani's 1A, which has 18 berths and no RAC: fill it with three bookings of 6 passengers, and the next booking gets `WL 1`.
+
+---
+
+## 8. Tests
+
+Both suites build their own throwaway database with `database/setup.sh`, so they don't touch `railway`. Run them from the repo root:
+
+```bash
+export PGHOST=localhost PGPORT=5432 PGUSER=postgres PGPASSWORD=...
+
+./database/c3-booking/tests/run_tests.sh   # database tests: every rule, trigger and procedure, plus the 10-session race
+./booking-service/run_tests.sh             # API tests (JUnit, against railway_test)
+```
+
+- **Database tests** (`database/c3-booking/tests/`):
+  - Build `railway_c3_test` and run every check inside a rolled-back transaction.
+  - Constraint tests check the SQLSTATE *and* the constraint name, so a test can't pass because a different rule fired.
+  - Then the race test runs, and the database is dropped.
+- **booking-service tests:**
+  - Rebuild `railway_test`, then run `./mvnw test`: token rules, who can reach which endpoint, search and availability, and the booking flows (confirmed, waitlisted, promoted after a cancellation, hold expiry, each database rule coming back as the right HTTP error).
+  - They refuse to run on a database whose name doesn't end in `_test`.
+
+The frontend has no tests; `cd frontend && npm run build` checks that it compiles.
+
+CI (`.github/workflows/ci.yml`) runs all three (database tests, booking-service tests and the frontend build) on every pull request.
+
+---
+
+## 9. What was removed from this branch
+
+`team3` had merged `main` early, so it also carried other teams' code. This branch keeps only what the Team 3 demo needs:
+
+| Removed | Owner | Why |
+|---|---|---|
+| `src/`, `pom.xml`, `mvnw`, `mvnw.cmd`, `.mvn/` (repo root) | Team 4: payments, refunds, concessions (Razorpay) | Replaced by the demo-pay stand-in |
+| `backend/` | Team 1: Node.js auth server (needs MongoDB) | Replaced by the demo login stand-in |
+| `docs/API.md` | Team 1: contract of the auth API in `backend/` | Its server is gone |
+| `decoded_image.jpg` | stray file | |
+| Frontend payment, refund and concession screens | Team 4 | Not part of the demo |
+
+**Kept** from other teams:
+- `database/c1-identity/` (Team 1's SQL only). The `users` table and the dev accounts are needed: `booking.user_id` references `users`, and `setup.sh` builds C1 before C3.
+- The network and concession placeholders in `database/c3-booking/`, which Team 3 wrote for Teams 2 and 4.

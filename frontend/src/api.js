@@ -1,7 +1,8 @@
-// Shared HTTP client for the three backends (see vite.config.js for which
-// service owns which /api path). Every call sends Team 1's access token; when
-// it has expired, the refresh token is traded for a new one once and the call
-// is retried.
+// HTTP client for booking-service, the only backend of the Team 3 demo (see
+// vite.config.js). Every call sends the access token from /api/auth/login
+// (Team 1's auth API, answered by booking-service in demo mode); when it has
+// expired, the refresh token is traded for a new one once and the call is
+// retried.
 
 const TOKEN_KEY = 'railway_jwt_token';
 const REFRESH_KEY = 'railway_refresh_token';
@@ -55,8 +56,8 @@ export const setSessionEndedHandler = (handler) => {
 };
 
 /**
- * The message of an error body. Team 1 and the booking service send
- * {"error": {"code", "message"}}; the payments app sends {"error": "message"}.
+ * The message of an error body: {"error": {"code", "message"}} from the
+ * booking service (and Team 1's auth API), or a plain {"error": "message"}.
  */
 export const errorMessage = (data, status) => {
   if (data?.error && typeof data.error === 'object') {
@@ -130,7 +131,7 @@ export async function apiRequest(endpoint, method = 'GET', body = null) {
   return data;
 }
 
-// ---------- Team 1: users and auth ----------
+// ---------- Auth: Team 1's API, served by booking-service in demo mode ----------
 
 export async function login(email, password) {
   const { res, data } = await send('/api/auth/login', 'POST', { email, password });
@@ -164,33 +165,10 @@ export const bookingApi = {
   create: (payload) => apiRequest('/api/bookings', 'POST', payload),
   mine: () => apiRequest('/api/bookings/mine'),
   get: (pnr) => apiRequest(`/api/bookings/${encodeURIComponent(pnr)}`),
-  // only unpaid (HELD) bookings; paid ones are cancelled through api.requestRefund
+  // HELD, or CONFIRMED in demo mode; no passengerIds means everyone still on the booking
   cancel: (pnr, passengerIds) =>
     apiRequest(`/api/bookings/${encodeURIComponent(pnr)}/cancel`, 'POST', { passengerIds }),
-};
-
-// ---------- Team 4: payments, refunds, concessions ----------
-
-export const api = {
-  // Payments: the amount always comes from the booking
-  createPaymentOrder: (pnr) => apiRequest('/api/payments/order', 'POST', { pnr }),
-  verifyPayment: (payload) => apiRequest('/api/payments/verify', 'POST', payload),
-  getMyPayments: () => apiRequest('/api/payments/my'),
-  getPaymentsForBooking: (pnr) => apiRequest(`/api/payments/booking/${encodeURIComponent(pnr)}`),
-
-  // Concessions
-  getConcessionPreview: (category, baseFare) =>
-    apiRequest(`/api/concessions/preview?${query({ category, baseFare })}`),
-  applyConcession: (payload) => apiRequest('/api/concessions/apply', 'POST', payload),
-  getMyConcessions: () => apiRequest('/api/concessions/my'),
-  getPendingConcessions: () => apiRequest('/api/concessions/pending'),
-  reviewConcession: (id, payload) => apiRequest(`/api/concessions/${id}/review`, 'POST', payload),
-
-  // Refunds: cancel passengers of a paid booking and refund them, in one step.
-  // No passengerIds means everyone still on the booking.
-  previewRefund: (pnr, passengerIds) =>
-    apiRequest(`/api/refunds/preview/${encodeURIComponent(pnr)}?${query({ passengerIds: passengerIds?.join(',') })}`),
-  requestRefund: (payload) => apiRequest('/api/refunds', 'POST', payload),
-  getMyRefunds: () => apiRequest('/api/refunds/my'),
-  getRefundsForBooking: (pnr) => apiRequest(`/api/refunds/booking/${encodeURIComponent(pnr)}`),
+  // Demo mode only: confirms a HELD booking without a real payment, standing in
+  // for Team 4's checkout. Answers with the booking, like get().
+  demoPay: (pnr) => apiRequest(`/api/bookings/${encodeURIComponent(pnr)}/demo-pay`, 'POST'),
 };

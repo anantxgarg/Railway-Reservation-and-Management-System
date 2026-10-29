@@ -5,6 +5,7 @@ import com.railway.booking.security.JwtAuthFilter;
 import com.railway.booking.security.TokenVerifier;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -25,7 +26,8 @@ public class SecurityConfig {
 
     @Bean
     SecurityFilterChain filterChain(HttpSecurity http, TokenVerifier verifier, JdbcTemplate jdbc,
-                                    ObjectMapper json) throws Exception {
+                                    ObjectMapper json,
+                                    @Value("${booking.demo.enabled:false}") boolean demoMode) throws Exception {
         // created here rather than as a @Component, so it runs only inside the security chain
         var jwtFilter = new JwtAuthFilter(verifier, jdbc, json);
 
@@ -35,12 +37,17 @@ public class SecurityConfig {
                 .logout(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
-                .authorizeHttpRequests(a -> a
-                        .requestMatchers("/error").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/search", "/api/runs/*/availability").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/bookings").hasRole("CUSTOMER")
-                        .requestMatchers("/api/bookings", "/api/bookings/**").authenticated()
-                        .anyRequest().authenticated())
+                .authorizeHttpRequests(a -> {
+                    a.requestMatchers("/error").permitAll()
+                            .requestMatchers(HttpMethod.GET, "/api/search", "/api/runs/*/availability").permitAll();
+                    if (demoMode) {
+                        // demo stand-in for Team 1's login (com.railway.booking.demo); /logout and /me need a token
+                        a.requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/refresh").permitAll();
+                    }
+                    a.requestMatchers(HttpMethod.POST, "/api/bookings").hasRole("CUSTOMER")
+                            .requestMatchers("/api/bookings", "/api/bookings/**").authenticated()
+                            .anyRequest().authenticated();
+                })
                 .exceptionHandling(e -> e
                         .authenticationEntryPoint((req, res, ex) ->
                                 write(res, json, HttpServletResponse.SC_UNAUTHORIZED,

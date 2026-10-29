@@ -51,7 +51,8 @@ public class BookingController {
 
     /**
      * Cancel an unpaid booking, whole or only the listed passengers. The owner, or STAFF/ADMIN.
-     * Paid bookings are cancelled through Team 4's refunds endpoint (409 PAID_BOOKING here).
+     * Paid bookings are cancelled through Team 4's refunds endpoint (409 PAID_BOOKING here),
+     * except in demo mode, where the owner may cancel them here (see BookingService.cancel).
      */
     @PostMapping("/{pnr}/cancel")
     public CancelResult cancel(@AuthenticationPrincipal AuthUser user, @PathVariable String pnr,

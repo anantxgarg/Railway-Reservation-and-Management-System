@@ -7,10 +7,6 @@ import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import SearchIcon from '@mui/icons-material/Search';
 import ConfirmationNumberIcon from '@mui/icons-material/ConfirmationNumber';
 import ListAltIcon from '@mui/icons-material/ListAlt';
-import ReceiptIcon from '@mui/icons-material/Receipt';
-import UndoIcon from '@mui/icons-material/Undo';
-import CardMembershipIcon from '@mui/icons-material/CardMembership';
-import SupervisorAccountIcon from '@mui/icons-material/SupervisorAccount';
 
 import LoginPage from './features/auth/LoginPage';
 import SearchPage from './features/booking/SearchPage';
@@ -18,21 +14,16 @@ import PassengerForm from './features/booking/PassengerForm';
 import BookingPage from './features/booking/BookingPage';
 import PnrLookup from './features/booking/PnrLookup';
 import MyBookings from './features/booking/MyBookings';
-import MyPayments from './components/MyPayments';
-import Refunds from './components/Refunds';
-import Concessions from './components/Concessions';
 import { getCurrentUser, logout, setSessionEndedHandler } from './api';
 import { navigate, useRoute } from './router';
 
 // Screens by the first part of the hash (#/pnr/123 -> 'pnr').
-// Booking: Team 3. Payments, refunds, concessions: Team 4. Login: Team 1's API.
+// Team 3 demo: booking screens only. Login uses Team 1's auth API, which
+// booking-service answers in demo mode.
 const TABS = [
   { route: 'search', label: 'Book', icon: <SearchIcon /> },
   { route: 'pnr', label: 'PNR status', icon: <ConfirmationNumberIcon /> },
   { route: 'bookings', label: 'My bookings', icon: <ListAltIcon />, customerOnly: true },
-  { route: 'payments', label: 'My payments', icon: <ReceiptIcon />, customerOnly: true },
-  { route: 'refunds', label: 'Refunds', icon: <UndoIcon /> },
-  { route: 'concessions', label: 'Concessions', icon: <CardMembershipIcon />, staffIcon: <SupervisorAccountIcon /> },
 ];
 
 const ROUTE_TAB = { book: 'search' };
@@ -78,15 +69,6 @@ export default function App() {
     case 'bookings':
       content = <MyBookings />;
       break;
-    case 'payments':
-      content = <MyPayments user={user} />;
-      break;
-    case 'refunds':
-      content = <Refunds user={user} />;
-      break;
-    case 'concessions':
-      content = <Concessions user={user} />;
-      break;
     default:
       content = <SearchPage params={known ? params : []} canBook={isCustomer} />;
   }
@@ -100,6 +82,7 @@ export default function App() {
             <Typography variant="h6" component="div" sx={{ fontWeight: 800, letterSpacing: '1px', color: '#f8fafc' }}>
               RAILWAY RESERVATION
             </Typography>
+            <Chip label="Team 3 · Booking demo" size="small" variant="outlined" sx={{ ml: 1.5, color: '#94a3b8', borderColor: '#22324e' }} />
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
             <Chip
@@ -142,7 +125,7 @@ export default function App() {
               <Tab
                 key={t.route}
                 value={t.route}
-                icon={!isCustomer && t.staffIcon ? t.staffIcon : t.icon}
+                icon={t.icon}
                 iconPosition="start"
                 label={t.label}
               />

@@ -213,6 +213,19 @@ class BookingApiTest extends ApiTestBase {
         getBooking(CUSTOMER, pnr).andExpect(jsonPath("$.status").value("CONFIRMED"));
     }
 
+    /** Demo mode is off by default: no stand-in login or payment (see DemoModeApiTest for demo mode). */
+    @Test
+    void demoEndpointsDoNotExistByDefault() throws Exception {
+        mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\": \"customer@example.com\", \"password\": \"Railway@Dev123\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.token").doesNotExist());
+        String pnr = book(CUSTOMER, runId("12127", 6), "2S", "CSMT", "PUNE", 1);
+        mvc.perform(post("/api/bookings/{pnr}/demo-pay", pnr).header(HttpHeaders.AUTHORIZATION, bearer(CUSTOMER)))
+                .andExpect(status().is4xxClientError());
+        getBooking(CUSTOMER, pnr).andExpect(jsonPath("$.status").value("HELD"));
+    }
+
     @Test
     void cancellingBeforePaymentLowersTheAmountToPay() throws Exception {
         String pnr = book(CUSTOMER, runId("12127", 6), "2S", "CSMT", "PUNE", 2);

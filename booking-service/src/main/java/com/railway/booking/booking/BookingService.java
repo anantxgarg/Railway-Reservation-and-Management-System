@@ -18,6 +18,7 @@ import com.railway.booking.network.NetworkRepository;
 import com.railway.booking.security.AuthUser;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,11 +36,15 @@ public class BookingService {
     private final BookingRepository bookings;
     private final NetworkRepository network;
     private final ObjectMapper json;
+    /** Demo mode (no Team 4): owners may cancel paid bookings here; see cancel(). */
+    private final boolean demoMode;
 
-    public BookingService(BookingRepository bookings, NetworkRepository network, ObjectMapper json) {
+    public BookingService(BookingRepository bookings, NetworkRepository network, ObjectMapper json,
+                          @Value("${booking.demo.enabled:false}") boolean demoMode) {
         this.bookings = bookings;
         this.network = network;
         this.json = json;
+        this.demoMode = demoMode;
     }
 
     @Transactional
@@ -73,14 +78,19 @@ public class BookingService {
      * cancelled through Team 4's POST /api/refunds instead, which calls
      * cancel_passengers in the same transaction as the refund, so a
      * cancellation can never happen without its refund or the other way round.
+     *
+     * Demo mode only (booking.demo.enabled, no Team 4 running): the owner may
+     * cancel a paid booking here too. No refund is issued; bookingWasPaid and
+     * cancelledFare in the result say what Team 4 would have refunded.
      */
     @Transactional
     public CancelResult cancel(AuthUser user, String pnr, List<Integer> passengerIds) {
         BookingRepository.Ownership booking = bookings.ownership(pnr).orElseThrow(() -> notFound(pnr));
-        if (booking.userId() != user.userId() && !user.isStaff()) {
+        boolean owner = booking.userId() == user.userId();
+        if (!owner && !user.isStaff()) {
             throw notFound(pnr);
         }
-        if ("CONFIRMED".equals(booking.status())) {
+        if ("CONFIRMED".equals(booking.status()) && !(demoMode && owner)) {
             throw new ApiException(HttpStatus.CONFLICT, "PAID_BOOKING",
                     "PNR " + pnr + " is paid; cancel it through POST /api/refunds so the refund is issued");
         }

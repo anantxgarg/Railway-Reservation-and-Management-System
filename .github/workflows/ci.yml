@@ -1,12 +1,12 @@
-# Runs every team's test suite on each pull request and on pushes to main.
-# Each job gets its own PostgreSQL, so suites that rebuild railway_test
-# don't interfere. Razorpay is mocked in the payments tests: no secrets needed.
+# Team 3 demo branch: runs the booking database tests, the booking-service
+# tests and the frontend build on each pull request and push.
+# Each job that needs PostgreSQL gets its own service container.
 name: CI
 
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, team3]
 
 permissions:
   contents: read
@@ -18,8 +18,8 @@ env:
   PGPASSWORD: postgres
 
 jobs:
-  auth:
-    name: Team 1 - users and auth
+  database:
+    name: Team 3 - booking database (C3)
     runs-on: ubuntu-24.04
     services:
       postgres:
@@ -29,26 +29,13 @@ jobs:
         ports: ['5432:5432']
         options: >-
           --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
-    defaults:
-      run:
-        working-directory: backend
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: npm
-          cache-dependency-path: backend/package-lock.json
-      - run: npm ci
-      - name: Unit tests
-        run: npm test
-      - name: Database tests (railway_test built by setup.sh)
-        run: |
-          PGDATABASE=railway_test ../database/setup.sh --reset
-          npm run test:db
+      - name: C3 database tests (constraints, triggers, procedures, race)
+        run: ./database/c3-booking/tests/run_tests.sh
 
-  booking-and-payments:
-    name: Team 3 booking and Team 4 payments
+  booking-service:
+    name: Team 3 - booking-service API
     runs-on: ubuntu-24.04
     services:
       postgres:
@@ -65,17 +52,9 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: maven
-          cache-dependency-path: |
-            pom.xml
-            booking-service/pom.xml
-      - name: C3 database tests
-        run: ./database/c3-booking/tests/run_tests.sh
+          cache-dependency-path: booking-service/pom.xml
       - name: Booking API tests
         run: ./booking-service/run_tests.sh
-      - name: Payments tests
-        run: |
-          PGDATABASE=railway_test ./database/setup.sh --reset
-          ./mvnw -B test
 
   frontend:
     name: Frontend build

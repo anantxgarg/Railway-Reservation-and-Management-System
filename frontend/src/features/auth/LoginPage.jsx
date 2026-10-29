@@ -9,10 +9,11 @@ import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import { login } from '../../api';
 
 // Minimal login against Team 1's POST /api/auth/login, built by Team 3 so the
-// booking screens have a token. Team 1 owns accounts; replace this with their
-// login screen (registration, password reset, ...) when it exists.
+// booking screens have a token. In the Team 3 demo booking-service answers
+// that API itself (demo mode), checking the same users table. Team 1 owns
+// accounts; registration and password reset are theirs and not in the demo.
 
-// Seeded by database/c1-identity, development only.
+// Seeded by database/c1-identity, for development and the demo only.
 const DEV_ACCOUNTS = ['customer@example.com', 'staff@example.com', 'admin@example.com'];
 const DEV_PASSWORD = 'Railway@Dev123';
 
@@ -97,27 +98,25 @@ export default function LoginPage({ onLogin, notice }) {
             </Button>
           </form>
 
-          {import.meta.env.DEV && (
-            <Box sx={{ mt: 3, textAlign: 'center' }}>
-              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                Development accounts
-              </Typography>
-              <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center', flexWrap: 'wrap' }}>
-                {DEV_ACCOUNTS.map((account) => (
-                  <Chip
-                    key={account}
-                    label={account.split('@')[0]}
-                    size="small"
-                    variant="outlined"
-                    onClick={() => {
-                      setEmail(account);
-                      setPassword(DEV_PASSWORD);
-                    }}
-                  />
-                ))}
-              </Box>
+          <Box sx={{ mt: 3, textAlign: 'center' }}>
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+              Demo accounts, password {DEV_PASSWORD} (click one to fill in)
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center', flexWrap: 'wrap' }}>
+              {DEV_ACCOUNTS.map((account) => (
+                <Chip
+                  key={account}
+                  label={account}
+                  size="small"
+                  variant="outlined"
+                  onClick={() => {
+                    setEmail(account);
+                    setPassword(DEV_PASSWORD);
+                  }}
+                />
+              ))}
             </Box>
-          )}
+          </Box>
         </CardContent>
       </Card>
     </Box>
